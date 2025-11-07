@@ -6071,9 +6071,10 @@ except Exception:
 # ===== /PATCH-B =====
 
 
-if __name__ == '__main__':
-    app = FontEditorApp()
-    app.mainloop()
+# [FIX v1.82.15] 古い起動コードをコメントアウト（二重起動の原因）
+# if __name__ == '__main__':
+#     app = FontEditorApp()
+#     app.mainloop()
 
 # ===== [INTEGRATED-PARTS-CATALOG] =====
 

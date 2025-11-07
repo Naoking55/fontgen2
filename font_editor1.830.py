@@ -2,10 +2,16 @@
 # -*- coding: utf-8 -*-
 """
 フォントエディタ - 高解像度ビットマップフォント制作ツール
-Version: 1.82.11
+Version: 1.82.12
 Last Updated: 2025-11-07
 
 変更履歴:
+- v1.82.12 (2025-11-07): ログエクスポート機能追加 📄
+  * 偏旁抽出ツールのログをテキストファイルに保存可能
+    - 「📄 ログを保存」ボタンを追加
+    - タイムスタンプ付きファイル名で自動提案
+    - UTF-8エンコーディングで保存
+  * トラブルシューティングと記録保持が容易に
 - v1.82.11 (2025-11-07): 動的境界検出の可視化対応 🔍
   * 動的境界検出の結果をログに表示
     - 固定ratioと検出ratioの比較を表示（例: [動的検出: 0.35 → 0.42]）
@@ -7354,7 +7360,12 @@ class PartsExtractorGUI:
             wrap=tk.WORD,
             font=("Monaco", 10) if sys.platform == "darwin" else ("Consolas", 9)
         )
-        self.log_text.pack(fill=tk.BOTH, expand=True)
+        self.log_text.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
+
+        # ログエクスポートボタン
+        log_button_frame = ttk.Frame(log_frame)
+        log_button_frame.pack(fill=tk.X)
+        ttk.Button(log_button_frame, text="📄 ログを保存", command=self._export_log).pack(side=tk.RIGHT)
 
         self._log("偏旁抽出ツール v2.9 - 動的境界検出対応")
         self._log("=" * 70)
@@ -7406,7 +7417,37 @@ class PartsExtractorGUI:
         self.log_text.insert(tk.END, message + "\n")
         self.log_text.see(tk.END)
         self.root.update()
-    
+
+    def _export_log(self):
+        """ログをテキストファイルにエクスポート"""
+        # ログの内容を取得
+        log_content = self.log_text.get("1.0", tk.END)
+
+        if not log_content.strip():
+            messagebox.showwarning("警告", "ログが空です")
+            return
+
+        # デフォルトファイル名（タイムスタンプ付き）
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"parts_extraction_log_{timestamp}.txt"
+
+        # 保存先を選択
+        filepath = filedialog.asksaveasfilename(
+            title="ログを保存",
+            initialfile=default_filename,
+            defaultextension=".txt",
+            filetypes=[("テキストファイル", "*.txt"), ("すべてのファイル", "*.*")]
+        )
+
+        if filepath:
+            try:
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(log_content)
+                messagebox.showinfo("保存完了", f"ログを保存しました:\n{filepath}")
+                self._log(f"\n📄 ログを保存: {filepath}")
+            except Exception as e:
+                messagebox.showerror("エラー", f"ログの保存に失敗しました:\n{e}")
+
     def _update_progress(self, current, total, message):
         self.progress_bar['maximum'] = total
         self.progress_bar['value'] = current

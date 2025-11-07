@@ -2,10 +2,19 @@
 # -*- coding: utf-8 -*-
 """
 フォントエディタ - 高解像度ビットマップフォント制作ツール
-Version: 1.82.18
+Version: 1.82.19
 Last Updated: 2025-11-07
 
 変更履歴:
+- v1.82.19 (2025-11-07): Python 3.13対応とスレッド安全性の修正 🔧🧵
+  * SyntaxWarning修正: 無効なエスケープシーケンス \\| を修正
+  * RuntimeError修正: バックグラウンドスレッドからのGUI操作を安全化
+    - queue.Queueを使用してスレッド間通信を実装
+    - bg_load関数でself.after()の代わりにキューを使用
+    - メインスレッドでキューを定期的にチェックしてGUI更新
+  * Python 3.13のtkinterで発生する「main thread is not in main loop」エラーを解決
+  * バックグラウンド読み込み機能が安定して動作するようになりました
+
 - v1.82.18 (2025-11-07): プレビューウィンドウの修正 🔧🖌️
   * 再抽出機能の修正: extract_single_partの戻り値を5つ受け取るように修正
   * 消しゴム機能の修正: 消去後にpreviewが更新されるように修正
@@ -124,7 +133,7 @@ Last Updated: 2025-11-07
     - 真っ黒な長方形が貼り付けられる問題を解決
   * プロジェクト保存のファイル名サニタイズを実装
     - ファイルシステムで使えない文字を自動的に置換
-    - /<>:"\|?* などを _ に変換
+    - /<>:"\\|?* などを _ に変換
     - safe_filenameをメタデータに記録
     - 保存エラーを防止し、詳細なログを出力
   * 偏旁抽出ツールの解像度を確認
@@ -199,6 +208,7 @@ import shutil
 import zipfile
 import time
 import datetime
+import queue
 from pathlib import Path
 from types import MethodType
 import numpy as np  # v1.82.9: 動的境界検出用
@@ -4125,6 +4135,9 @@ class FontEditorApp(tk.Tk):
         # 総文字数を計算
         total_chars = sum(len(codes) for _, codes in categories_to_load)
 
+        # メインスレッドとの通信用キュー
+        task_queue = queue.Queue()
+
         # バックグラウンドスレッドで読み込み
         def bg_load():
             try:
@@ -4157,19 +4170,48 @@ class FontEditorApp(tk.Tk):
                             progress = int(loaded_chars / total_chars * 100)
                             current_range = range_name
                             cat_progress = int((idx + 1) / cat_total * 100)
-                            self.after(0, lambda p=progress, rn=current_range, cp=cat_progress, c=cat_idx+1, t=len(categories_to_load):
-                                self.status_label.config(
-                                    text=f'{Path(font_path).name} - 読み込み中 [{c}/{t}] {rn} ({cp}%) - 全体 {p}%'
-                                ))
+                            # キューにステータス更新タスクを追加
+                            task_queue.put(('status', {
+                                'progress': progress,
+                                'range_name': current_range,
+                                'cat_progress': cat_progress,
+                                'cat_idx': cat_idx + 1,
+                                'total_cats': len(categories_to_load)
+                            }))
 
                 # 全範囲を読み込み済みとしてマーク
-                self.after(0, lambda: self._on_background_complete(font_path))
+                task_queue.put(('complete', font_path))
             except Exception as e:
-                self.after(0, lambda: messagebox.showerror('エラー', f'バックグラウンド読み込みエラー:\n{e}'))
+                task_queue.put(('error', str(e)))
+
+        # キューからタスクを処理する関数
+        def process_queue():
+            queue_active = True
+            try:
+                while True:
+                    task_type, data = task_queue.get_nowait()
+                    if task_type == 'status':
+                        self.status_label.config(
+                            text=f'{Path(font_path).name} - 読み込み中 [{data["cat_idx"]}/{data["total_cats"]}] {data["range_name"]} ({data["cat_progress"]}%) - 全体 {data["progress"]}%'
+                        )
+                    elif task_type == 'complete':
+                        self._on_background_complete(data)
+                        queue_active = False  # 完了したらキュー処理を停止
+                    elif task_type == 'error':
+                        messagebox.showerror('エラー', f'バックグラウンド読み込みエラー:\n{data}')
+                        queue_active = False  # エラー時もキュー処理を停止
+            except queue.Empty:
+                pass
+            # キューがまだアクティブなら100ms後に再度チェック
+            if queue_active:
+                self.after(100, process_queue)
 
         # スレッド開始
         thread = threading.Thread(target=bg_load, daemon=True)
         thread.start()
+
+        # キュー処理開始
+        self.after(100, process_queue)
 
         # ステータス更新
         self.status_label.config(

@@ -2,10 +2,21 @@
 # -*- coding: utf-8 -*-
 """
 フォントエディタ - 高解像度ビットマップフォント制作ツール
-Version: 1.82.13
+Version: 1.82.14
 Last Updated: 2025-11-07
 
 変更履歴:
+- v1.82.14 (2025-11-07): 動的境界検出のデバッグ強化＆ログ拡充 🔍📋
+  * 動的境界検出のデバッグログを追加
+    - 検出成功時: [動的検出] 部首名: 0.350 → 0.420
+    - 検出エラー時: [動的検出エラー] 部首名: エラーメッセージ
+    - extract_single_part関数にlog_callback対応
+  * 主要操作にログを追加
+    - グリフ編集ウィンドウを開く/保存
+    - 偏旁選択/クリップボードにコピー
+    - プロジェクト保存/読み込み（成功/失敗）
+  * トラブルシューティングが大幅に向上
+  * 動的境界検出が動作しない原因を特定可能に
 - v1.82.13 (2025-11-07): 全体ログシステムの実装 📋
   * フォントエディタ全体のログ機能を追加
     - メニューバーに「ツール」→「📋 ログを表示」を追加
@@ -4212,9 +4223,13 @@ class FontEditorApp(tk.Tk):
     
     def _on_edit_char(self, char_code: int) -> None:
         """文字編集ウィンドウを開く"""
+        char_str = chr(char_code) if 0x20 <= char_code <= 0x10FFFF else f"U+{char_code:04X}"
+        self._log(f"グリフ編集ウィンドウを開く: {char_str} (U+{char_code:04X})")
+
         def on_save() -> None:
             self.grid_view.refresh()
             self._update_status()
+            self._log(f"グリフを保存: {char_str} (U+{char_code:04X})")
 
         editor = GlyphEditor(self, self.project, char_code, on_save)
         self._open_editors.append(editor)
@@ -4222,6 +4237,7 @@ class FontEditorApp(tk.Tk):
     def _insert_part_to_active_editor(self, part_image: Image.Image, part_name: str, offset: Tuple[float, float] = (0.0, 0.0)) -> None:
         """[FIX v1.82.8] 偏旁を変形してクリップボードに格納"""
         try:
+            self._log(f"偏旁を選択: {part_name}")
             # 変形ダイアログを表示
             dialog = PartTransformDialog(self, part_image, part_name)
             self.wait_window(dialog)
@@ -4230,13 +4246,14 @@ class FontEditorApp(tk.Tk):
                 # 変形された画像をクリップボードにコピー
                 transformed_image = dialog.result
                 self.project.clipboard = transformed_image
-                # [DEBUG] 2025-11-06: クリップボード設定をログ出力
-                print(f"[DEBUG] Clipboard set in _insert_part_to_active_editor: {self.project.clipboard}")
-                print(f"[DEBUG] Clipboard size: {self.project.clipboard.size}")
+                self._log(f"偏旁をクリップボードにコピー: {part_name} (サイズ: {transformed_image.size})")
                 messagebox.showinfo("クリップボードにコピー",
                     f"偏旁「{part_name}」を変形してクリップボードにコピーしました。\n"
                     "文字編集ウィンドウで「📄 貼付」ボタンまたは Ctrl+V / ⌘V で貼り付けてください。")
+            else:
+                self._log(f"偏旁変形をキャンセル: {part_name}")
         except Exception as e:
+            self._log(f"偏旁コピーエラー: {part_name} - {e}")
             messagebox.showerror("エラー", f"クリップボードへのコピーに失敗しました:\n{e}")
 
     def _update_status(self) -> None:
@@ -4494,6 +4511,8 @@ def _save_project_dialog_impl(self: FontEditorApp) -> bool:
     if not path:
         return False
 
+    self._log(f"プロジェクト保存開始: {path}")
+
     # --- 単一ファイル保存 ---
     if path.endswith('.fprojz'):
         return _export_project_singlefile_impl(self, path)
@@ -4507,22 +4526,26 @@ def _save_project_dialog_impl(self: FontEditorApp) -> bool:
             orig_glyphs = self.project.glyphs
             snapshot = dict(orig_glyphs)
             self.project.glyphs = snapshot
-        
+
         try:
             self.project.save_project(path)
             self.project.dirty = False
+            self._log(f"プロジェクト保存成功: {path}")
             messagebox.showinfo('保存完了', f'プロジェクトを保存しました:\n{path}')
             return True
         except OSError as e:
+            self._log(f"プロジェクト保存失敗 (OSError): {path} - {e}")
             messagebox.showerror('保存エラー', f'保存に失敗しました:\n{e}')
             return False
         except Exception as e:
+            self._log(f"プロジェクト保存失敗 (Exception): {path} - {e}")
             messagebox.showerror('保存エラー', f'予期しないエラー:\n{e}')
             return False
         finally:
             with self.project._lock:
                 self.project.glyphs = orig_glyphs
     except Exception as e:
+        self._log(f"プロジェクト保存処理エラー: {path} - {e}")
         messagebox.showerror('保存エラー', f'保存処理中にエラーが発生しました:\n{e}')
         return False
 
@@ -4535,6 +4558,9 @@ def _open_project_dialog_impl(self: FontEditorApp) -> None:
     folder = filedialog.askdirectory(title='プロジェクトを開く（*.fproj フォルダを選択）')
     if not folder:
         return
+
+    self._log(f"プロジェクト読み込み開始: {folder}")
+
     try:
         self.project.load_project(folder)
         self.project.dirty = False
@@ -4542,10 +4568,13 @@ def _open_project_dialog_impl(self: FontEditorApp) -> None:
             self.grid_view.refresh()
         if hasattr(self, '_update_status'):
             self._update_status()
+        self._log(f"プロジェクト読み込み成功: {folder}")
         messagebox.showinfo('読込完了', f'プロジェクトを読み込みました:\n{folder}')
     except OSError as e:
+        self._log(f"プロジェクト読み込み失敗 (OSError): {folder} - {e}")
         messagebox.showerror('読込エラー', f'プロジェクト読込に失敗しました:\n{e}')
     except Exception as e:
+        self._log(f"プロジェクト読み込み失敗 (Exception): {folder} - {e}")
         messagebox.showerror('読込エラー', f'予期しないエラー:\n{e}')
 
 
@@ -6562,7 +6591,7 @@ def save_as_transparent_png(img, output_path):
 # [BLOCK3-BEGIN] パーツ抽出コア処理 (2025-10-10)
 # ============================================================
 
-def extract_single_part(font_path, part_name, part_info, output_path, noise_removal=True):
+def extract_single_part(font_path, part_name, part_info, output_path, noise_removal=True, log_callback=None):
     """単一パーツを抽出（フォールバック機能 + 動的境界検出対応）"""
     try:
         split_type = part_info["split"]
@@ -6588,6 +6617,9 @@ def extract_single_part(font_path, part_name, part_info, output_path, noise_remo
 
         # 動的境界検出（オプション機能）
         used_ratio = ratio
+        dynamic_detection_used = False
+        dynamic_detection_error = None
+
         if Config.DYNAMIC_BOUNDARY_DETECTION:
             try:
                 detector = DynamicBoundaryDetector(binary_threshold=Config.BINARY_THRESHOLD)
@@ -6607,10 +6639,16 @@ def extract_single_part(font_path, part_name, part_info, output_path, noise_remo
                     # 最適な分割位置を検出
                     candidates_dynamic = detector.find_optimal_split(img, direction, search_range, num_candidates=1)
                     if candidates_dynamic:
+                        old_ratio = used_ratio
                         used_ratio = candidates_dynamic[0][0]  # トップ候補のratio
+                        dynamic_detection_used = True
+                        if log_callback:
+                            log_callback(f"    [動的検出] {part_name}: {old_ratio:.3f} → {used_ratio:.3f}")
             except Exception as e:
-                # 動的検出に失敗した場合は固定ratioを使用（無視して続行）
-                pass
+                # 動的検出に失敗した場合は固定ratioを使用
+                dynamic_detection_error = str(e)
+                if log_callback:
+                    log_callback(f"    [動的検出エラー] {part_name}: {e}")
 
         # 分割処理
         part_img = split_glyph(img, split_type, used_ratio)
@@ -6699,7 +6737,10 @@ def extract_all_parts(font_path, output_dir, progress_callback=None, log_callbac
             if progress_callback:
                 progress_callback(current_idx, total_parts, f"{part_name} 処理中...")
 
-            success, img, error, used_char, used_ratio = extract_single_part(font_path, part_name, part_info, output_path)
+            success, img, error, used_char, used_ratio = extract_single_part(
+                font_path, part_name, part_info, output_path,
+                noise_removal=True, log_callback=log
+            )
 
             if success:
                 # ログメッセージの構築

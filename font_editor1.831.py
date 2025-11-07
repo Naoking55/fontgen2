@@ -2,10 +2,15 @@
 # -*- coding: utf-8 -*-
 """
 フォントエディタ - 高解像度ビットマップフォント制作ツール
-Version: 1.82.14
+Version: 1.82.15
 Last Updated: 2025-11-07
 
 変更履歴:
+- v1.82.15 (2025-11-07): 動的境界検出の詳細デバッグログ追加 🔍🐛
+  * 動的境界検出が実行されているか確認するための詳細ログ追加
+  * 各ステップでの状態を可視化
+  * 検出アルゴリズムの動作確認用ログ強化
+
 - v1.82.14 (2025-11-07): 動的境界検出のデバッグ強化＆ログ拡充 🔍📋
   * 動的境界検出のデバッグログを追加
     - 検出成功時: [動的検出] 部首名: 0.350 → 0.420
@@ -6052,18 +6057,26 @@ class DynamicBoundaryDetector:
             - score: スコア（低いほど境界らしい）
             - info: 詳細情報
         """
+        # [DEBUG] 検出開始
         w, h = img.size
+        print(f"        [DynamicBoundary DEBUG] 画像サイズ: {w}x{h}, 方向: {direction}, 探索範囲: {search_range}")
+
         img_array = np.array(img)
         binary = img_array < self.binary_threshold
+
+        print(f"        [DynamicBoundary DEBUG] 二値化完了 (threshold={self.binary_threshold})")
 
         candidates = []
 
         if direction == "vertical":
             # 縦方向に走査（左右分割）
+            scan_count = 0
             for ratio in np.arange(search_range[0], search_range[1], Config.BOUNDARY_SCAN_STEP):
                 x = int(w * ratio)
                 if x <= 0 or x >= w:
                     continue
+
+                scan_count += 1
 
                 # この位置での垂直線上の黒ピクセル密度
                 line = binary[:, x]
@@ -6080,12 +6093,18 @@ class DynamicBoundaryDetector:
                     'edge_score': edge_score,
                     'position': x
                 }))
+
+            print(f"        [DynamicBoundary DEBUG] 縦方向スキャン完了: {scan_count}箇所調査, {len(candidates)}候補発見")
+
         else:
             # 横方向に走査（上下分割）
+            scan_count = 0
             for ratio in np.arange(search_range[0], search_range[1], Config.BOUNDARY_SCAN_STEP):
                 y = int(h * ratio)
                 if y <= 0 or y >= h:
                     continue
+
+                scan_count += 1
 
                 line = binary[y, :]
                 density = np.sum(line) / w
@@ -6100,11 +6119,19 @@ class DynamicBoundaryDetector:
                     'position': y
                 }))
 
+            print(f"        [DynamicBoundary DEBUG] 横方向スキャン完了: {scan_count}箇所調査, {len(candidates)}候補発見")
+
         # スコアが低い順（境界らしい順）にソート
         candidates.sort(key=lambda x: x[1])
 
+        if candidates:
+            top_candidate = candidates[0]
+            print(f"        [DynamicBoundary DEBUG] 最適候補: ratio={top_candidate[0]:.3f}, score={top_candidate[1]:.4f}")
+
         # トップN候補を返す
-        return candidates[:num_candidates]
+        result = candidates[:num_candidates]
+        print(f"        [DynamicBoundary DEBUG] 返却候補数: {len(result)}")
+        return result
 
     def _calculate_edge_score(self, binary: np.ndarray, position: int, direction: str) -> float:
         """エッジスコアを計算（境界の強さ）"""
@@ -6620,7 +6647,17 @@ def extract_single_part(font_path, part_name, part_info, output_path, noise_remo
         dynamic_detection_used = False
         dynamic_detection_error = None
 
+        # [DEBUG] 動的検出の開始をログ出力
+        if log_callback:
+            log_callback(f"    [DEBUG] {part_name}: 動的検出チェック開始")
+            log_callback(f"      - Config.DYNAMIC_BOUNDARY_DETECTION = {Config.DYNAMIC_BOUNDARY_DETECTION}")
+            log_callback(f"      - split_type = {split_type}")
+            log_callback(f"      - 初期ratio = {ratio:.3f}")
+
         if Config.DYNAMIC_BOUNDARY_DETECTION:
+            if log_callback:
+                log_callback(f"    [DEBUG] {part_name}: 動的検出が有効 - 実行開始")
+
             try:
                 detector = DynamicBoundaryDetector(binary_threshold=Config.BINARY_THRESHOLD)
 
@@ -6635,20 +6672,45 @@ def extract_single_part(font_path, part_name, part_info, output_path, noise_remo
                     # frame, left_bottom, top_left は動的検出非対応（固定ratioを使用）
                     direction = None
 
+                if log_callback:
+                    log_callback(f"      - direction = {direction}")
+                    if direction:
+                        log_callback(f"      - search_range = {search_range}")
+
                 if direction:
                     # 最適な分割位置を検出
+                    if log_callback:
+                        log_callback(f"    [DEBUG] {part_name}: find_optimal_split()呼び出し中...")
+
                     candidates_dynamic = detector.find_optimal_split(img, direction, search_range, num_candidates=1)
+
+                    if log_callback:
+                        log_callback(f"      - 検出候補数: {len(candidates_dynamic) if candidates_dynamic else 0}")
+
                     if candidates_dynamic:
                         old_ratio = used_ratio
                         used_ratio = candidates_dynamic[0][0]  # トップ候補のratio
+                        score = candidates_dynamic[0][1]
                         dynamic_detection_used = True
                         if log_callback:
-                            log_callback(f"    [動的検出] {part_name}: {old_ratio:.3f} → {used_ratio:.3f}")
+                            log_callback(f"    ✅ [動的検出成功] {part_name}: {old_ratio:.3f} → {used_ratio:.3f} (score: {score:.4f})")
+                    else:
+                        if log_callback:
+                            log_callback(f"    ⚠️ [動的検出] {part_name}: 候補が見つかりませんでした（固定ratio使用）")
+                else:
+                    if log_callback:
+                        log_callback(f"    ℹ️ [動的検出スキップ] {part_name}: {split_type}は動的検出非対応")
+
             except Exception as e:
                 # 動的検出に失敗した場合は固定ratioを使用
                 dynamic_detection_error = str(e)
                 if log_callback:
-                    log_callback(f"    [動的検出エラー] {part_name}: {e}")
+                    log_callback(f"    ❌ [動的検出エラー] {part_name}: {e}")
+                    import traceback
+                    log_callback(f"      スタックトレース:\n{traceback.format_exc()}")
+        else:
+            if log_callback:
+                log_callback(f"    ℹ️ [動的検出無効] {part_name}: 設定で無効化されています")
 
         # 分割処理
         part_img = split_glyph(img, split_type, used_ratio)

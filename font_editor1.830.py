@@ -2,10 +2,21 @@
 # -*- coding: utf-8 -*-
 """
 フォントエディタ - 高解像度ビットマップフォント制作ツール
-Version: 1.82.10
-Last Updated: 2025-11-06
+Version: 1.82.11
+Last Updated: 2025-11-07
 
 変更履歴:
+- v1.82.11 (2025-11-07): 動的境界検出の可視化対応 🔍
+  * 動的境界検出の結果をログに表示
+    - 固定ratioと検出ratioの比較を表示（例: [動的検出: 0.35 → 0.42]）
+    - 検出値が固定値から0.01以上変わった場合のみ表示
+  * カタログにused_ratioフィールドを追加
+    - 実際に使用された分割比率を記録
+    - 将来的な分析と最適化に活用可能
+  * 偏旁抽出ツールのタイトルをv2.9に更新
+    - 起動時に動的検出の設定状態を表示
+    - 探索範囲とスキャンステップをログに出力
+  * extract_single_part関数の戻り値にused_ratioを追加
 - v1.82.10 (2025-11-06): 修正版 - 動的境界検出とクリップボード貼り付け 🔧
   * 動的境界検出をデフォルトで有効化（DYNAMIC_BOUNDARY_DETECTION = True）
   * PartTransformDialogの初期化バグを修正（current_transformedが未定義の問題）
@@ -6451,12 +6462,12 @@ def extract_single_part(font_path, part_name, part_info, output_path, noise_remo
 
         # 保存
         if save_as_transparent_png(part_img, output_path):
-            return True, part_img, None, used_char
+            return True, part_img, None, used_char, used_ratio
         else:
-            return False, None, "保存失敗", used_char
+            return False, None, "保存失敗", used_char, used_ratio
 
     except Exception as e:
-        return False, None, str(e), None
+        return False, None, str(e), None, ratio
 
 
 def extract_all_parts(font_path, output_dir, progress_callback=None, log_callback=None):
@@ -6480,10 +6491,15 @@ def extract_all_parts(font_path, output_dir, progress_callback=None, log_callbac
     catalog_json = {}
     
     log("=" * 70)
-    log("偏旁抽出ツール")
+    log("偏旁抽出ツール v2.9 (動的境界検出対応)")
     log("=" * 70)
     log(f"フォント: {font_path}")
     log(f"出力先: {output_dir}")
+    log(f"動的境界検出: {'有効' if Config.DYNAMIC_BOUNDARY_DETECTION else '無効'}")
+    if Config.DYNAMIC_BOUNDARY_DETECTION:
+        log(f"  探索範囲(左右): {Config.BOUNDARY_SEARCH_RANGE_LR}")
+        log(f"  探索範囲(上下): {Config.BOUNDARY_SEARCH_RANGE_TB}")
+        log(f"  スキャンステップ: {Config.BOUNDARY_SCAN_STEP}")
     log("=" * 70)
     log("")
     
@@ -6519,14 +6535,22 @@ def extract_all_parts(font_path, output_dir, progress_callback=None, log_callbac
             if progress_callback:
                 progress_callback(current_idx, total_parts, f"{part_name} 処理中...")
 
-            success, img, error, used_char = extract_single_part(font_path, part_name, part_info, output_path)
+            success, img, error, used_char, used_ratio = extract_single_part(font_path, part_name, part_info, output_path)
 
             if success:
-                # 使用文字が異なる場合はその旨を表示
+                # ログメッセージの構築
+                log_parts = [msg, " ... ✅ 保存完了"]
+
+                # 使用文字が異なる場合
                 if used_char != part_info["sample"]:
-                    log(f"{msg} ... ✅ 保存完了 (使用文字: {used_char})")
-                else:
-                    log(f"{msg} ... ✅ 保存完了")
+                    log_parts.append(f" (使用文字: {used_char})")
+
+                # 動的境界検出が使用された場合
+                original_ratio = part_info.get("ratio", 0.5)
+                if Config.DYNAMIC_BOUNDARY_DETECTION and abs(used_ratio - original_ratio) > 0.01:
+                    log_parts.append(f" [動的検出: {original_ratio:.2f} → {used_ratio:.2f}]")
+
+                log("".join(log_parts))
                 stats["success"] += 1
                 category_stats["success"] += 1
 
@@ -6536,6 +6560,7 @@ def extract_all_parts(font_path, output_dir, progress_callback=None, log_callbac
                     "file": filename,
                     "split": part_info["split"],
                     "ratio": part_info.get("ratio", 0.5),
+                    "used_ratio": used_ratio,  # 実際に使用されたratio
                     "category": category  # カテゴリ情報を追加
                 }
             else:
@@ -7276,12 +7301,12 @@ class PartsExtractorGUI:
     
     def __init__(self, root):
         self.root = root
-        self.root.title("偏旁抽出ツール v2.8 (2025-10-10) - 補間描画対応")
-        
+        self.root.title("偏旁抽出ツール v2.9 (2025-11-06) - 動的境界検出対応")
+
         self.font_path = None
         self.output_dir = "assets/parts"
         self.is_running = False
-        
+
         self._setup_ui()
     
     def _setup_ui(self):
@@ -7330,12 +7355,14 @@ class PartsExtractorGUI:
             font=("Monaco", 10) if sys.platform == "darwin" else ("Consolas", 9)
         )
         self.log_text.pack(fill=tk.BOTH, expand=True)
-        
-        self._log("偏旁抽出ツール v2.8 - 補間描画対応")
+
+        self._log("偏旁抽出ツール v2.9 - 動的境界検出対応")
         self._log("=" * 70)
         self._log("【更新内容】")
-        self._log("  ✅ 消しゴム補間描画: デコボコを大幅軽減")
-        self._log("  ✅ 滑らかな消去が可能に")
+        self._log("  ✅ 動的境界検出: 画像解析で最適な分割位置を自動検出")
+        self._log("  ✅ 高精度抽出: 接触文字でも境界を正確に判定")
+        self._log("  ✅ 詳細ログ: 使用された検出値をリアルタイム表示")
+        self._log(f"  ⚙️ 設定: 動的検出 {'有効' if Config.DYNAMIC_BOUNDARY_DETECTION else '無効'}")
         self._log("=" * 70)
     
     def _select_font(self):

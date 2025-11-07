@@ -2,10 +2,23 @@
 # -*- coding: utf-8 -*-
 """
 フォントエディタ - 高解像度ビットマップフォント制作ツール
-Version: 1.82.16-DEBUG
+Version: 1.82.18
 Last Updated: 2025-11-07
 
 変更履歴:
+- v1.82.18 (2025-11-07): プレビューウィンドウの修正 🔧🖌️
+  * 再抽出機能の修正: extract_single_partの戻り値を5つ受け取るように修正
+  * 消しゴム機能の修正: 消去後にpreviewが更新されるように修正
+  * パフォーマンス改善: 補間描画時のpreview更新を最適化（ドラッグが滑らかに）
+  * すべてのキャンバス編集ツールが正常に動作するようになりました
+
+- v1.82.17 (2025-11-07): 繞・垂に動的境界検出を実装 🎯✨
+  * left_bottom（繞/にょう）に動的境界検出を適用
+  * top_left（垂/たれ）に動的境界検出を適用
+  * しんにょう、まだれなどの複雑な形状も自動検出可能に
+  * 繞・垂の抽出精度が大幅向上
+  * frame（構/かまえ）は引き続き固定ratio使用
+
 - v1.82.16-DEBUG (2025-11-07): 偏旁抽出ツールのバージョン表示を明確化 🎯
   * ウィンドウタイトル: "🔍 偏旁抽出ツール v2.9.5-DEBUG" に変更
   * 確実に新しいバージョンを使っていることが分かるように
@@ -6673,8 +6686,20 @@ def extract_single_part(font_path, part_name, part_info, output_path, noise_remo
                 elif split_type in ["top", "bottom"]:
                     direction = "horizontal"
                     search_range = Config.BOUNDARY_SEARCH_RANGE_TB
+                elif split_type == "left_bottom":
+                    # 繞（にょう）: 左下を囲む形状 - 縦方向で検出
+                    direction = "vertical"
+                    search_range = Config.BOUNDARY_SEARCH_RANGE_LR
+                    if log_callback:
+                        log_callback(f"      - left_bottom検出: 縦方向スキャンを使用")
+                elif split_type == "top_left":
+                    # 垂（たれ）: 上から左へ垂れる形状 - 横方向で検出
+                    direction = "horizontal"
+                    search_range = Config.BOUNDARY_SEARCH_RANGE_TB
+                    if log_callback:
+                        log_callback(f"      - top_left検出: 横方向スキャンを使用")
                 else:
-                    # frame, left_bottom, top_left は動的検出非対応（固定ratioを使用）
+                    # frame は動的検出非対応（固定ratioを使用）
                     direction = None
 
                 if log_callback:
@@ -7411,30 +7436,30 @@ class PartsPreviewWindow(tk.Toplevel):
         """2点間を補間して消去（デコボコ軽減）"""  # [ADD] 2025-10-10
         distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
         steps = max(int(distance / 2), 1)  # ブラシサイズの半分ごとに補間
-        
+
         for i in range(steps + 1):
             t = i / steps
             x = int(x1 + t * (x2 - x1))
             y = int(y1 + t * (y2 - y1))
-            self._erase_at_image(x, y)
-        
-        self._update_preview()
+            self._erase_at_image(x, y, update_preview=False)  # 補間中はpreview更新を抑制
+
+        self._update_preview()  # 補間完了後に1回だけpreview更新
         self._update_eraser_cursor_position(
             int(200 + (x2 - self.current_image.width / 2) * self.preview_scale),
             int(175 + (y2 - self.current_image.height / 2) * self.preview_scale)
         )
     
-    def _erase_at_image(self, img_x, img_y):
+    def _erase_at_image(self, img_x, img_y, update_preview=True):
         """画像座標で消去"""  # [RENAME] 2025-10-10: _erase_atから名称変更
         if self.current_image is None:
             return
-        
+
         if not (0 <= img_x < self.current_image.width and 0 <= img_y < self.current_image.height):
             return
-        
+
         draw = ImageDraw.Draw(self.current_image)
         radius = int(self.eraser_size_var.get())
-        
+
         if self.eraser_shape == 'circle':
             draw.ellipse([img_x-radius, img_y-radius, img_x+radius, img_y+radius], fill=255)
         elif self.eraser_shape == 'square':
@@ -7447,9 +7472,11 @@ class PartsPreviewWindow(tk.Toplevel):
                 (img_x - radius, img_y)
             ]
             draw.polygon(points, fill=255)
-        
+
         self.modified = True
-    
+        if update_preview:
+            self._update_preview()  # 消去後にプレビューを更新
+
     def _re_extract(self):
         """再抽出"""
         if not self.current_part:
@@ -7472,7 +7499,7 @@ class PartsPreviewWindow(tk.Toplevel):
         filename = part_data["file"]
         output_path = os.path.join(self.parts_dir, filename)
         
-        success, img, error = extract_single_part(
+        success, img, error, used_char, used_ratio = extract_single_part(
             self.font_path,
             self.current_part,
             part_info,

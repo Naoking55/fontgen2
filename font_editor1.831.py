@@ -2,10 +2,30 @@
 # -*- coding: utf-8 -*-
 """
 フォントエディタ - 高解像度ビットマップフォント制作ツール
-Version: 1.82.14
+Version: 1.82.15
 Last Updated: 2025-11-07
 
 変更履歴:
+- v1.82.15 (2025-11-07): 偏旁パレット表示高速化＆直接貼り付け機能復活 🚀✨
+  * 偏旁パレットのサムネイル表示システムを実装
+    - 128x128pxのサムネイル画像を自動生成（Config.PARTS_THUMBNAIL_SIZE）
+    - 大きな画像を直接表示していた問題を解決し、表示が大幅に高速化
+    - 偏旁取り込み時に自動的にサムネイルを生成
+  * 偏旁パレットからの直接貼り付け機能を復活
+    - v1.825の実装に戻し、クリップボード経由ではなく直接挿入
+    - 「貼付」ボタンをクリックするとすぐに開いているエディタに貼り付け
+    - 文字編集ウィンドウを開いてから偏旁を選択するだけで使用可能
+  * プロジェクトにサムネイル管理機能を追加
+    - generate_part_thumbnail: 偏旁画像からサムネイルを生成
+    - update_part_with_thumbnail: 偏旁とサムネイルをまとめて更新
+  * 偏旁データ構造の拡張
+    - parts辞書に'thumbnail'フィールドを追加
+    - 既存の'image'と'meta'に加えてサムネイルも保存
+  * ユーザビリティが大幅に向上
+    - 偏旁パレットの表示速度が劇的に改善
+    - 偏旁貼り付けのワークフローが元の快適さに復帰
+    - 2048px高解像度画像でも軽快に動作
+
 - v1.82.14 (2025-11-07): 動的境界検出のデバッグ強化＆ログ拡充 🔍📋
   * 動的境界検出のデバッグログを追加
     - 検出成功時: [動的検出] 部首名: 0.350 → 0.420
@@ -227,6 +247,7 @@ class Config:
     # ===== 解像度設定 (2025-10-17: 高品質フォント制作用に2048px) =====
     CANVAS_SIZE = 2048  # 編集キャンバスサイズ (px) - 高品質フォント制作用
     GRID_THUMB_SIZE = 128  # グリッド表示時のサムネイルサイズ
+    PARTS_THUMBNAIL_SIZE = 128  # 偏旁パレット表示用サムネイルサイズ (v1.82.15)
     TARGET_DPI = 300  # 目標DPI
     
     # ===== フォントレンダリング設定 (2025-10-17: 2048px用に最適化) =====
@@ -705,6 +726,50 @@ class FontProject:
     def mark_range_loaded(self, range_tuple: Tuple[int, int]):
         """範囲を読み込み済みとしてマーク"""
         self.loaded_ranges.add(range_tuple)
+
+    def generate_part_thumbnail(self, part_image: Image.Image, size: int = None) -> Image.Image:
+        """
+        [ADD v1.82.15] 偏旁画像からサムネイルを生成
+
+        Args:
+            part_image: 元の偏旁画像
+            size: サムネイルのサイズ（Noneの場合はConfig.PARTS_THUMBNAIL_SIZEを使用）
+
+        Returns:
+            サムネイル画像
+        """
+        if size is None:
+            size = Config.PARTS_THUMBNAIL_SIZE
+
+        # アスペクト比を維持してリサイズ
+        img = part_image.copy()
+        img.thumbnail((size, size), Image.Resampling.LANCZOS)
+        return img
+
+    def update_part_with_thumbnail(self, part_name: str, part_image: Image.Image, meta: dict = None):
+        """
+        [ADD v1.82.15] 偏旁をサムネイル付きで更新
+
+        Args:
+            part_name: 偏旁名
+            part_image: 偏旁画像
+            meta: メタデータ（Noneの場合は既存のものを保持）
+        """
+        # サムネイルを生成
+        thumbnail = self.generate_part_thumbnail(part_image)
+
+        # メタデータの更新
+        if meta is None and part_name in self.parts:
+            meta = self.parts[part_name].get('meta', {})
+        elif meta is None:
+            meta = {}
+
+        # partsに保存
+        self.parts[part_name] = {
+            'image': part_image,
+            'thumbnail': thumbnail,
+            'meta': meta
+        }
 
 # ===== [本体 BLOCK2-END] =====
 
@@ -4235,26 +4300,32 @@ class FontEditorApp(tk.Tk):
         self._open_editors.append(editor)
 
     def _insert_part_to_active_editor(self, part_image: Image.Image, part_name: str, offset: Tuple[float, float] = (0.0, 0.0)) -> None:
-        """[FIX v1.82.8] 偏旁を変形してクリップボードに格納"""
+        """[FIX v1.82.15] 偏旁を開いているエディタに直接挿入"""
+        # 開いているエディタの中で最後にフォーカスされたものを見つける
+        active_editor = None
+        for editor in self._open_editors:
+            try:
+                if editor.winfo_exists() and editor.state() == 'normal':
+                    active_editor = editor
+            except Exception:
+                continue
+
+        if not active_editor:
+            messagebox.showwarning("警告", "文字編集ウィンドウを開いてから偏旁を貼り付けてください")
+            return
+
         try:
             self._log(f"偏旁を選択: {part_name}")
-            # 変形ダイアログを表示
-            dialog = PartTransformDialog(self, part_image, part_name)
-            self.wait_window(dialog)
-
-            if dialog.result:
-                # 変形された画像をクリップボードにコピー
-                transformed_image = dialog.result
-                self.project.clipboard = transformed_image
-                self._log(f"偏旁をクリップボードにコピー: {part_name} (サイズ: {transformed_image.size})")
-                messagebox.showinfo("クリップボードにコピー",
-                    f"偏旁「{part_name}」を変形してクリップボードにコピーしました。\n"
-                    "文字編集ウィンドウで「📄 貼付」ボタンまたは Ctrl+V / ⌘V で貼り付けてください。")
+            # GlyphEditorのinsert_part_imageメソッドを呼び出す
+            if hasattr(active_editor, 'insert_part_image'):
+                active_editor.insert_part_image(part_image, scale_hint=1.0, offset_hint=offset)
+                self._log(f"偏旁を貼り付け: {part_name}")
+                messagebox.showinfo("貼付完了", f"偏旁「{part_name}」を貼り付けました")
             else:
-                self._log(f"偏旁変形をキャンセル: {part_name}")
+                messagebox.showerror("エラー", "エディタが偏旁貼り付けに対応していません")
         except Exception as e:
-            self._log(f"偏旁コピーエラー: {part_name} - {e}")
-            messagebox.showerror("エラー", f"クリップボードへのコピーに失敗しました:\n{e}")
+            self._log(f"偏旁貼り付けエラー: {part_name} - {e}")
+            messagebox.showerror("エラー", f"偏旁の貼り付けに失敗しました:\n{e}")
 
     def _update_status(self) -> None:
         """ステータス更新"""
@@ -4777,7 +4848,9 @@ def _import_parts_from_folder_impl(self, folder: str) -> None:
             continue
         key = os.path.splitext(name)[0]
         meta = catalog.get(key, {})
-        parts[key] = {'image': img, 'meta': meta, 'path': path}
+        # [ADD v1.82.15] サムネイルを生成
+        thumbnail = self.project.generate_part_thumbnail(img)
+        parts[key] = {'image': img, 'thumbnail': thumbnail, 'meta': meta, 'path': path}
     self.project.parts = parts
     # mark project dirty so save will include parts via our save hook
     try:
@@ -5679,6 +5752,13 @@ class _InternalPartsPalette(tk.Toplevel):
             img = data.get("image")
             if img is None: continue
 
+            # [FIX v1.82.15] サムネイルを取得（なければその場で生成）
+            thumbnail = data.get("thumbnail")
+            if thumbnail is None:
+                # サムネイルがない場合は生成
+                thumbnail = self.project.generate_part_thumbnail(img)
+                data["thumbnail"] = thumbnail
+
             # メタデータからカテゴリを取得
             meta = data.get("meta", {})
             category = meta.get("category", "other")
@@ -5687,7 +5767,7 @@ class _InternalPartsPalette(tk.Toplevel):
             if category not in categorized:
                 category = "other"
 
-            categorized[category].append((key, img, meta))
+            categorized[category].append((key, img, thumbnail, meta))
 
         # 各カテゴリのタブを作成
         for cat_id, cat_name in self.category_names.items():
@@ -5716,11 +5796,9 @@ class _InternalPartsPalette(tk.Toplevel):
             self.tab_inner_frames[cat_id] = inner
 
             # 偏旁を配置
-            for i, (key, img, meta) in enumerate(items):
-                scale = max(img.width, img.height) or 1
-                tw = max(1, int(img.width * (120.0 / scale)))
-                th = max(1, int(img.height * (120.0 / scale)))
-                tkimg = ImageTk.PhotoImage(img.resize((tw, th)))
+            for i, (key, img, thumbnail, meta) in enumerate(items):
+                # [FIX v1.82.15] サムネイルを使用して高速表示
+                tkimg = ImageTk.PhotoImage(thumbnail)
                 self._tkimgs[key] = tkimg
 
                 row = tk.Frame(inner, padx=4, pady=4, relief="ridge", borderwidth=1)

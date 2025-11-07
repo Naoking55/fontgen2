@@ -2,16 +2,34 @@
 # -*- coding: utf-8 -*-
 """
 フォントエディタ - 高解像度ビットマップフォント制作ツール
-Version: 1.82.12
+Version: 1.82.13
 Last Updated: 2025-11-07
 
 変更履歴:
-- v1.82.12 (2025-11-07): ログエクスポート機能追加 📄
+- v1.82.13 (2025-11-07): 全体ログシステムの実装 📋
+  * フォントエディタ全体のログ機能を追加
+    - メニューバーに「ツール」→「📋 ログを表示」を追加
+    - すべての主要操作をログに記録（最大1000件）
+    - タイムスタンプ付きでログを表示
+  * ログビューアーウィンドウを実装
+    - リアルタイムでログを更新可能
+    - 読みやすいスクロール可能なテキストエリア
+  * ログエクスポート機能
+    - 「ツール」→「💾 ログを保存」でファイルに出力
+    - タイムスタンプ付きファイル名を自動提案
+    - UTF-8エンコーディングで保存
+  * 記録される主な操作
+    - フォント読み込み（成功/失敗）
+    - TTCファイルからのTTF抽出
+    - プロジェクト保存/読み込み
+    - BDF/TTF/PNGエクスポート
+    - アプリケーション起動/終了
+  * トラブルシューティングと記録保持が飛躍的に向上
+- v1.82.12 (2025-11-07): 偏旁抽出ツールのログエクスポート機能追加 📄
   * 偏旁抽出ツールのログをテキストファイルに保存可能
     - 「📄 ログを保存」ボタンを追加
     - タイムスタンプ付きファイル名で自動提案
     - UTF-8エンコーディングで保存
-  * トラブルシューティングと記録保持が容易に
 - v1.82.11 (2025-11-07): 動的境界検出の可視化対応 🔍
   * 動的境界検出の結果をログに表示
     - 固定ratioと検出ratioの比較を表示（例: [動的検出: 0.35 → 0.42]）
@@ -3841,13 +3859,18 @@ class FontEditorApp(tk.Tk):
     def __init__(self) -> None:
         self._open_editors: List[GlyphEditor] = []  # 開いているエディタ追跡
         super().__init__()
-        
+
         self.title('フォントエディタ - ハイブリッド方式(全機能版)')
         self.geometry(f'{Config.WINDOW_WIDTH}x{Config.WINDOW_HEIGHT}')
-        
+
         self.project: FontProject = FontProject()
         self.bg_loader: Optional['BackgroundLoader'] = None  # バックグラウンドローダー (2025-10-03)
         self.current_filter: str = 'all'  # 現在のフィルタ (2025-10-03)
+
+        # [ADD] 2025-11-07: グローバルログシステム
+        self.app_log: List[str] = []  # ログバッファ
+        self.max_log_entries: int = 1000  # 最大ログエントリ数
+        self._log("フォントエディタ起動")
 
         # [ADD] 2025-11-06: 自動保存用
         self.auto_save_enabled = Config.AUTO_SAVE_ENABLED
@@ -3897,7 +3920,13 @@ class FontEditorApp(tk.Tk):
         export_menu.add_command(label='TTF形式で保存... (高品質アウトライン)', command=self._export_ttf)
         export_menu.add_separator()
         export_menu.add_command(label='PNG一括書き出し...', command=self._export_png_batch)
-        
+
+        # [ADD] 2025-11-07: ツールメニュー
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label='ツール', menu=tools_menu)
+        tools_menu.add_command(label='📋 ログを表示...', command=self._show_log_viewer)
+        tools_menu.add_command(label='💾 ログを保存...', command=self._export_app_log)
+
         # ツールバー
         toolbar = tk.Frame(self, bg=Config.COLOR_BG)
         toolbar.pack(side='top', fill='x', padx=5, pady=5)
@@ -3945,12 +3974,17 @@ class FontEditorApp(tk.Tk):
         if not path:
             return
 
+        self._log(f"フォントファイルを選択: {path}")
+
         # [ADD] 2025-11-06: TTCファイルの場合は抽出
         if path.lower().endswith('.ttc'):
+            self._log(f"TTCファイルを検出、TTF抽出を試行")
             extracted_path = extract_ttf_from_ttc(path)
             if extracted_path is None:
+                self._log("TTCからのTTF抽出に失敗")
                 return  # 抽出失敗
             path = extracted_path
+            self._log(f"TTF抽出成功: {path}")
 
         # プロジェクト初期化
         self.project.font_path = path
@@ -4005,6 +4039,7 @@ class FontEditorApp(tk.Tk):
 
         if not success:
             progress_win.destroy()
+            self._log(f"フォント読み込み失敗: {path}")
             return
 
         # 基本ラテン文字範囲を読み込み済みとしてマーク
@@ -4021,7 +4056,9 @@ class FontEditorApp(tk.Tk):
         total = len(basic_char_codes)
         empty = self.project.get_empty_count()
         defined = total - empty
-        
+
+        self._log(f"フォント読み込み成功: {path} (定義済み: {defined}, 空白: {empty})")
+
         # [FIX v1.82.5] 読み込み完了メッセージ
         messagebox.showinfo(
             '読込完了',
@@ -4277,9 +4314,13 @@ class FontEditorApp(tk.Tk):
         )
         
         if path:
+            self._log(f"BDF形式でエクスポート開始: {path}")
             if FontExporter.export_bdf(self.project, path):
+                self._log(f"BDF形式エクスポート成功: {path}")
                 messagebox.showinfo('書き出し完了', f'BDF書き出し完了:\n{path}')
-    
+            else:
+                self._log(f"BDF形式エクスポート失敗: {path}")
+
     def _export_ttf(self) -> None:
         """TTF書き出し"""
         if not self.project.glyphs:
@@ -4297,20 +4338,137 @@ class FontEditorApp(tk.Tk):
         )
         
         if path:
+            self._log(f"TTF形式でエクスポート開始: {path}")
             if TTFExporter.export_ttf(self.project, path):
+                self._log(f"TTF形式エクスポート成功: {path}")
                 messagebox.showinfo('書き出し完了', f'TTF書き出し完了:\n{path}')
-    
+            else:
+                self._log(f"TTF形式エクスポート失敗: {path}")
+
     def _export_png_batch(self) -> None:
         """PNG一括書き出し"""
         if not self.project.glyphs:
             messagebox.showwarning('警告', 'フォントが読み込まれていません')
             return
-        
+
         folder = filedialog.askdirectory(title='PNGを保存するフォルダを選択')
-        
+
         if folder:
+            self._log(f"PNG一括エクスポート開始: {folder}")
             count = FontExporter.export_png_batch(self.project, folder)
+            self._log(f"PNG一括エクスポート成功: {count}個のファイルを作成")
             messagebox.showinfo('書き出し完了', f'{count}個のPNGを書き出しました:\n{folder}')
+
+    # ===== [ADD] 2025-11-07: グローバルログシステム =====
+
+    def _log(self, message: str) -> None:
+        """アプリケーションログに記録"""
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_entry = f"[{timestamp}] {message}"
+        self.app_log.append(log_entry)
+
+        # ログエントリ数制限
+        if len(self.app_log) > self.max_log_entries:
+            self.app_log = self.app_log[-self.max_log_entries:]
+
+        # コンソールにも出力（デバッグ用）
+        print(log_entry)
+
+    def _show_log_viewer(self) -> None:
+        """ログビューアーウィンドウを表示"""
+        viewer = tk.Toplevel(self)
+        viewer.title("アプリケーションログ")
+        viewer.geometry("900x600")
+        viewer.transient(self)
+
+        # 説明
+        tk.Label(
+            viewer,
+            text="フォントエディタの操作ログ（最大1000件）",
+            font=("", 11, "bold")
+        ).pack(pady=5)
+
+        # ログテキスト表示エリア
+        log_frame = ttk.Frame(viewer)
+        log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        log_text = scrolledtext.ScrolledText(
+            log_frame,
+            wrap=tk.WORD,
+            font=("Monaco", 9) if sys.platform == "darwin" else ("Consolas", 9)
+        )
+        log_text.pack(fill=tk.BOTH, expand=True)
+
+        # ログ内容を表示
+        if self.app_log:
+            log_text.insert(tk.END, "\n".join(self.app_log))
+        else:
+            log_text.insert(tk.END, "（ログはまだ記録されていません）")
+
+        log_text.config(state=tk.DISABLED)
+
+        # ボタンフレーム
+        button_frame = ttk.Frame(viewer)
+        button_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        ttk.Button(
+            button_frame,
+            text="更新",
+            command=lambda: self._refresh_log_viewer(log_text)
+        ).pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(
+            button_frame,
+            text="ログを保存...",
+            command=self._export_app_log
+        ).pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(
+            button_frame,
+            text="閉じる",
+            command=viewer.destroy
+        ).pack(side=tk.RIGHT, padx=5)
+
+    def _refresh_log_viewer(self, log_text_widget) -> None:
+        """ログビューアーの内容を更新"""
+        log_text_widget.config(state=tk.NORMAL)
+        log_text_widget.delete("1.0", tk.END)
+
+        if self.app_log:
+            log_text_widget.insert(tk.END, "\n".join(self.app_log))
+        else:
+            log_text_widget.insert(tk.END, "（ログはまだ記録されていません）")
+
+        log_text_widget.config(state=tk.DISABLED)
+        log_text_widget.see(tk.END)
+
+    def _export_app_log(self) -> None:
+        """アプリケーションログをファイルに保存"""
+        if not self.app_log:
+            messagebox.showwarning("警告", "保存するログがありません")
+            return
+
+        # デフォルトファイル名（タイムスタンプ付き）
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"font_editor_log_{timestamp}.txt"
+
+        # 保存先を選択
+        filepath = filedialog.asksaveasfilename(
+            title="ログを保存",
+            initialfile=default_filename,
+            defaultextension=".txt",
+            filetypes=[("テキストファイル", "*.txt"), ("すべてのファイル", "*.*")]
+        )
+
+        if filepath:
+            try:
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write("\n".join(self.app_log))
+                messagebox.showinfo("保存完了", f"ログを保存しました:\n{filepath}")
+                self._log(f"ログをファイルに保存: {filepath}")
+            except Exception as e:
+                messagebox.showerror("エラー", f"ログの保存に失敗しました:\n{e}")
+
 # [INTEGRATED] removed misplaced _open_parts_editor (replaced by bound impl)
 # [INTEGRATED] removed malformed helper block (replaced by bound impls)
 

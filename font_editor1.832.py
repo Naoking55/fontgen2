@@ -2,13 +2,14 @@
 # -*- coding: utf-8 -*-
 """
 フォントエディタ - 高解像度ビットマップフォント制作ツール
-Version: 1.83.2 (クリーン版 - v1.70ベース)
+Version: 1.83.3 (クリーン版 - v1.70ベース + 偏旁抽出ツール修正)
 Last Updated: 2025-11-07
 
 このバージョンについて:
 - v1.70の安定して動作する実装をベースにしています
 - 複雑化したv1.831の問題を解決するためのクリーン版です
 - 文字キャンバスの全ツールが正常に動作します
+- v1.83.3: 偏旁抽出ツールが起動しない問題を修正（scrolledtextインポート追加）
 
 主な機能:
 ✅ グリフ編集ツール（ペン、消しゴム、塗りつぶし、選択、移動、拡大縮小）
@@ -18,9 +19,13 @@ Last Updated: 2025-11-07
 ✅ クリップボード機能
 ✅ 高解像度2048px対応
 ✅ BDF/TTF/PNGエクスポート
+✅ 偏旁抽出ツール（v2.8 - 補間描画対応）
+
+更新履歴:
+- v1.83.3 (2025-11-07): 偏旁抽出ツール起動問題を修正 - scrolledtextインポート追加
+- v1.83.2 (2025-11-07): v1.70をベースにクリーン版として再構築
 
 作成日: 2025-10-03
-更新日: 2025-11-07 (v1.70をベースにv1.83.2として再構築)
 """
 
 # === 標準ライブラリ ===
@@ -40,7 +45,7 @@ from contextlib import contextmanager
 
 # === サードパーティライブラリ ===
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, scrolledtext
 
 from PIL import Image, ImageDraw, ImageFont, ImageTk, ImageChops
 

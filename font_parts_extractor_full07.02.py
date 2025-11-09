@@ -830,9 +830,20 @@ class PartsPreviewWindow(tk.Toplevel):
         self.zoom_level = 1.0
         self.zoom_levels = [0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0]
         self.preview_scale = 1.0
-        
+
+        # パン（スクロール）機能用
+        self.pan_offset_x = 0
+        self.pan_offset_y = 0
+        self.pan_start_x = 0
+        self.pan_start_y = 0
+        self.is_panning = False
+
+        # 表示オフセット（座標変換用）
+        self.display_x_offset = 0
+        self.display_y_offset = 0
+
         self.eraser_cursor_id = None
-        
+
         # [ADD] 2025-10-10: 補間描画用
         self.last_erase_pos = None
         
@@ -883,11 +894,15 @@ class PartsPreviewWindow(tk.Toplevel):
         self.parts_canvas = tk.Canvas(canvas_frame, bg="white")
         scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical", command=self.parts_canvas.yview)
         self.scrollable_frame = ttk.Frame(self.parts_canvas)
-        
+
         self.scrollable_frame.bind(
             "<Configure>",
             lambda e: self.parts_canvas.configure(scrollregion=self.parts_canvas.bbox("all"))
         )
+
+        # キャンバスリサイズ時にグリッドを再描画
+        self._parts_canvas_resize_after_id = None
+        self.parts_canvas.bind('<Configure>', self._on_parts_canvas_resize)
         
         self.parts_canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
         self.parts_canvas.configure(yscrollcommand=scrollbar.set)
@@ -934,8 +949,19 @@ class PartsPreviewWindow(tk.Toplevel):
         self.preview_canvas.bind('<Configure>', self._on_canvas_resize)
         self.preview_canvas.bind('<Button-1>', self._on_canvas_click)
         self.preview_canvas.bind('<B1-Motion>', self._on_canvas_drag)
-        self.preview_canvas.bind('<ButtonRelease-1>', self._on_canvas_release)  # [ADD] 2025-10-10
+        self.preview_canvas.bind('<ButtonRelease-1>', self._on_canvas_release)
         self.preview_canvas.bind('<Motion>', self._on_canvas_motion)
+        # パン機能（中ボタンまたはShift+左ボタン）
+        self.preview_canvas.bind('<Button-2>', self._on_pan_start)
+        self.preview_canvas.bind('<B2-Motion>', self._on_pan_drag)
+        self.preview_canvas.bind('<ButtonRelease-2>', self._on_pan_end)
+        self.preview_canvas.bind('<Shift-Button-1>', self._on_pan_start)
+        self.preview_canvas.bind('<Shift-B1-Motion>', self._on_pan_drag)
+        self.preview_canvas.bind('<Shift-ButtonRelease-1>', self._on_pan_end)
+        # マウスホイールでズーム
+        self.preview_canvas.bind('<MouseWheel>', self._on_mousewheel_zoom)
+        self.preview_canvas.bind('<Button-4>', self._on_mousewheel_zoom)  # Linux
+        self.preview_canvas.bind('<Button-5>', self._on_mousewheel_zoom)  # Linux
         
         # 編集ツール
         tools_frame = ttk.LabelFrame(right_frame, text="編集ツール", padding=5)
@@ -1039,29 +1065,48 @@ class PartsPreviewWindow(tk.Toplevel):
         selection = self.category_listbox.curselection()
         if not selection:
             return
-        
+
         idx = selection[0]
         categories = ["hen", "tsukuri", "kanmuri", "ashi", "nyou", "tare", "kamae"]
         self.current_category = categories[idx]
-        
+
         self._display_parts_grid()
+
+    def _on_parts_canvas_resize(self, event):
+        """パーツキャンバスリサイズ時の処理（デバウンス付き）"""
+        # 既存のタイマーをキャンセル
+        if self._parts_canvas_resize_after_id:
+            self.after_cancel(self._parts_canvas_resize_after_id)
+        # 300ms後にグリッド再描画（リサイズ中の頻繁な再描画を防ぐ）
+        self._parts_canvas_resize_after_id = self.after(300, self._redisplay_if_category_selected)
+
+    def _redisplay_if_category_selected(self):
+        """カテゴリが選択されている場合のみグリッドを再描画"""
+        if self.current_category:
+            self._display_parts_grid()
     
     def _display_parts_grid(self):
         """パーツ一覧表示"""
         for widget in self.scrollable_frame.winfo_children():
             widget.destroy()
-        
+
         self.photo_cache.clear()
-        
+
         if self.current_category not in self.catalog:
             ttk.Label(self.scrollable_frame, text="パーツがありません").pack(pady=20)
             return
-        
+
         parts = self.catalog[self.current_category]
-        
+
+        # キャンバス幅に基づいて動的にカラム数を決定
+        self.parts_canvas.update_idletasks()
+        canvas_width = self.parts_canvas.winfo_width()
+        # 各アイテムの幅を約120px（パディング含む）として計算
+        item_width = 120
+        max_cols = max(1, (canvas_width - 20) // item_width)
+
         col_count = 0
         row_count = 0
-        max_cols = 7
         
         for part_name, part_data in parts.items():
             filename = part_data["file"]
@@ -1198,6 +1243,8 @@ class PartsPreviewWindow(tk.Toplevel):
     def _zoom_reset(self):
         """ズームリセット"""
         self.zoom_level = 1.0
+        self.pan_offset_x = 0
+        self.pan_offset_y = 0
         self.zoom_label.config(text="100%")
         self._update_preview()
     
@@ -1216,44 +1263,67 @@ class PartsPreviewWindow(tk.Toplevel):
             canvas_w = 400
         if canvas_h <= 1:
             canvas_h = 350
-        
+
         orig_w = self.current_image.width
         orig_h = self.current_image.height
-        
+
         scale_w = canvas_w / orig_w if orig_w > 0 else 1.0
         scale_h = canvas_h / orig_h if orig_h > 0 else 1.0
         fit_scale = min(scale_w, scale_h, 1.0)
-        
+
         final_scale = fit_scale * self.zoom_level
-        
+
         new_w = int(orig_w * final_scale)
         new_h = int(orig_h * final_scale)
-        
+
         display_img = self.current_image.resize((new_w, new_h), Image.Resampling.NEAREST)
-        
-        bg = Image.new('L', (canvas_w, canvas_h), 255)
-        x_offset = (canvas_w - new_w) // 2
-        y_offset = (canvas_h - new_h) // 2
-        
-        if x_offset >= 0 and y_offset >= 0:
+
+        # チェッカーボード背景を作成（透過部分と外側を区別）
+        bg = self._create_checkerboard_bg(canvas_w, canvas_h)
+
+        # パンオフセットを適用
+        x_offset = (canvas_w - new_w) // 2 + self.pan_offset_x
+        y_offset = (canvas_h - new_h) // 2 + self.pan_offset_y
+
+        # 表示オフセットを保存（座標変換用）
+        self.display_x_offset = x_offset
+        self.display_y_offset = y_offset
+
+        if x_offset >= 0 and y_offset >= 0 and x_offset + new_w <= canvas_w and y_offset + new_h <= canvas_h:
             bg.paste(display_img, (x_offset, y_offset))
         else:
             paste_x = max(0, x_offset)
             paste_y = max(0, y_offset)
-            
+
             crop_x = max(0, -x_offset)
             crop_y = max(0, -y_offset)
-            crop_w = min(new_w - crop_x, canvas_w)
-            crop_h = min(new_h - crop_y, canvas_h)
-            
-            cropped = display_img.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
-            bg.paste(cropped, (paste_x, paste_y))
-        
+            crop_w = min(new_w - crop_x, canvas_w - paste_x)
+            crop_h = min(new_h - crop_y, canvas_h - paste_y)
+
+            if crop_w > 0 and crop_h > 0:
+                cropped = display_img.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
+                bg.paste(cropped, (paste_x, paste_y))
+
         self.preview_photo = ImageTk.PhotoImage(bg)
         self.preview_canvas.delete("all")
         self.preview_canvas.create_image(canvas_w//2, canvas_h//2, image=self.preview_photo)
-        
+
         self.preview_scale = final_scale
+
+    def _create_checkerboard_bg(self, width, height, grid_size=16):
+        """チェッカーボード背景を作成（透過部分の可視化）"""
+        bg = Image.new('L', (width, height), 255)
+        pixels = bg.load()
+
+        for y in range(height):
+            for x in range(width):
+                # チェッカーパターン
+                if ((x // grid_size) + (y // grid_size)) % 2 == 0:
+                    pixels[x, y] = 240  # 明るいグレー
+                else:
+                    pixels[x, y] = 220  # やや暗いグレー
+
+        return bg
     
     def _toggle_eraser(self):
         """消しゴムモード切り替え"""
@@ -1321,55 +1391,108 @@ class PartsPreviewWindow(tk.Toplevel):
     
     def _on_canvas_click(self, event):
         """キャンバスクリック"""
+        if self.is_panning:
+            return
         if self.eraser_mode and self.current_image:
             self._save_to_undo()
             img_x, img_y = self._canvas_to_image_coords(event.x, event.y)
-            self.last_erase_pos = (img_x, img_y)  # [ADD] 2025-10-10
+            self.last_erase_pos = (img_x, img_y)
             self._erase_at_image(img_x, img_y)
-    
+
     def _on_canvas_drag(self, event):
-        """キャンバスドラッグ"""  # [FIX] 2025-10-10: 補間描画追加
+        """キャンバスドラッグ"""
+        if self.is_panning:
+            return
         if self.eraser_mode and self.current_image:
             img_x, img_y = self._canvas_to_image_coords(event.x, event.y)
-            
+
             if self.last_erase_pos:
                 # 前回の位置から現在の位置まで補間
                 self._interpolate_erase(self.last_erase_pos[0], self.last_erase_pos[1], img_x, img_y)
             else:
                 self._erase_at_image(img_x, img_y)
-            
+
             self.last_erase_pos = (img_x, img_y)
     
     def _on_canvas_release(self, event):
-        """マウスボタン解放"""  # [ADD] 2025-10-10
+        """マウスボタン解放"""
         self.last_erase_pos = None
+
+    def _on_pan_start(self, event):
+        """パン開始"""
+        self.is_panning = True
+        self.pan_start_x = event.x
+        self.pan_start_y = event.y
+        self.preview_canvas.config(cursor="fleur")
+
+    def _on_pan_drag(self, event):
+        """パン中"""
+        if self.is_panning:
+            dx = event.x - self.pan_start_x
+            dy = event.y - self.pan_start_y
+            self.pan_offset_x += dx
+            self.pan_offset_y += dy
+            self.pan_start_x = event.x
+            self.pan_start_y = event.y
+            self._update_preview()
+
+    def _on_pan_end(self, event):
+        """パン終了"""
+        self.is_panning = False
+        if self.eraser_mode:
+            self.preview_canvas.config(cursor="none")
+        else:
+            self.preview_canvas.config(cursor="")
+
+    def _on_mousewheel_zoom(self, event):
+        """マウスホイールでズーム"""
+        # Windowsとmacではevent.delta、Linuxではevent.num
+        if hasattr(event, 'delta'):
+            delta = event.delta
+        elif event.num == 4:
+            delta = 120
+        elif event.num == 5:
+            delta = -120
+        else:
+            return
+
+        if delta > 0:
+            self._zoom_in()
+        else:
+            self._zoom_out()
     
     def _canvas_to_image_coords(self, canvas_x, canvas_y):
-        """キャンバス座標を画像座標に変換"""  # [ADD] 2025-10-10
-        img_x = int((canvas_x - 200) / self.preview_scale + self.current_image.width / 2)
-        img_y = int((canvas_y - 175) / self.preview_scale + self.current_image.height / 2)
-        
+        """キャンバス座標を画像座標に変換"""
+        if self.current_image is None:
+            return 0, 0
+
+        # 表示オフセットを使用して正確に変換
+        img_x = int((canvas_x - self.display_x_offset) / self.preview_scale)
+        img_y = int((canvas_y - self.display_y_offset) / self.preview_scale)
+
+        # 画像範囲内にクリップ
         img_x = max(0, min(img_x, self.current_image.width - 1))
         img_y = max(0, min(img_y, self.current_image.height - 1))
-        
+
         return img_x, img_y
     
     def _interpolate_erase(self, x1, y1, x2, y2):
-        """2点間を補間して消去（デコボコ軽減）"""  # [ADD] 2025-10-10
+        """2点間を補間して消去（デコボコ軽減）"""
         distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
         steps = max(int(distance / 2), 1)  # ブラシサイズの半分ごとに補間
-        
+
         for i in range(steps + 1):
             t = i / steps
             x = int(x1 + t * (x2 - x1))
             y = int(y1 + t * (y2 - y1))
             self._erase_at_image(x, y)
-        
+
         self._update_preview()
-        self._update_eraser_cursor_position(
-            int(200 + (x2 - self.current_image.width / 2) * self.preview_scale),
-            int(175 + (y2 - self.current_image.height / 2) * self.preview_scale)
-        )
+
+        # 画像座標からキャンバス座標に変換してカーソル更新
+        canvas_x = int(self.display_x_offset + x2 * self.preview_scale)
+        canvas_y = int(self.display_y_offset + y2 * self.preview_scale)
+        self._update_eraser_cursor_position(canvas_x, canvas_y)
     
     def _erase_at_image(self, img_x, img_y):
         """画像座標で消去"""  # [RENAME] 2025-10-10: _erase_atから名称変更

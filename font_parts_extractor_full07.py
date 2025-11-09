@@ -172,11 +172,12 @@ PARTS_CATALOG = {
 
         # 自然・天候に関する冠
         "あめかんむり": {"char": "雨", "sample": "雷", "split": "top", "ratio": 0.4, "alternatives": ["雪", "雲", "電"]},
+        "やまかんむり": {"char": "山", "sample": "岩", "split": "top", "ratio": 0.35, "alternatives": ["嵩", "嶺", "峠"]},
 
         # 建物・覆うものに関する冠
         "うかんむり": {"char": "宀", "sample": "宇", "split": "top", "ratio": 0.25, "alternatives": ["宙", "宝", "家", "安"]},
         "あなかんむり": {"char": "穴", "sample": "空", "split": "top", "ratio": 0.35, "alternatives": ["究", "窓"]},
-        "わかんむり": {"char": "冖", "sample": "冠", "split": "top", "ratio": 0.25, "alternatives": ["冬", "冷"]},
+        "わかんむり": {"char": "冖", "sample": "冠", "split": "top", "ratio": 0.25, "alternatives": ["冬", "冷", "写", "冗"]},
 
         # 網・枠に関する冠
         "あみがしら": {"char": "罒", "sample": "買", "split": "top", "ratio": 0.3, "alternatives": ["罪", "置"]},
@@ -204,6 +205,13 @@ PARTS_CATALOG = {
         "ひとあし": {"char": "儿", "sample": "児", "split": "bottom", "ratio": 0.7, "alternatives": ["兄", "元", "光"]},
         "さら": {"char": "皿", "sample": "盛", "split": "bottom", "ratio": 0.7, "alternatives": ["益", "盗"]},
         "したみず": {"char": "水", "sample": "泰", "split": "bottom", "ratio": 0.7},
+        "こがい": {"char": "貝", "sample": "買", "split": "bottom", "ratio": 0.65, "alternatives": ["貨", "賀", "貸"]},
+        "き": {"char": "夂", "sample": "条", "split": "bottom", "ratio": 0.7, "alternatives": ["桑", "冬"]},
+        "くち": {"char": "口", "sample": "含", "split": "bottom", "ratio": 0.7, "alternatives": ["否", "杏"]},
+        "ころも": {"char": "衣", "sample": "製", "split": "bottom", "ratio": 0.65, "alternatives": ["装", "襲", "裏"]},
+        "したごころ": {"char": "心", "sample": "恭", "split": "bottom", "ratio": 0.7, "alternatives": ["慕", "忠"]},
+        "つち": {"char": "土", "sample": "墓", "split": "bottom", "ratio": 0.7, "alternatives": ["型", "塞"]},
+        "いわく": {"char": "曰", "sample": "書", "split": "bottom", "ratio": 0.7, "alternatives": ["替", "曹"]},
     },
     
     # ===== 繞（にょう）: 左下を囲む =====
@@ -211,6 +219,9 @@ PARTS_CATALOG = {
         "しんにょう": {"char": "辶", "sample": "近", "split": "left_bottom", "ratio": 0.6, "alternatives": ["道", "進", "通", "遠"]},
         "えんにょう": {"char": "廴", "sample": "延", "split": "left_bottom", "ratio": 0.55, "alternatives": ["建", "廷"]},
         "そうにょう": {"char": "走", "sample": "起", "split": "left_bottom", "ratio": 0.65},
+        "きにょう": {"char": "鬼", "sample": "魅", "split": "left_bottom", "ratio": 0.6, "alternatives": ["魁", "魂"]},
+        "ばくにょう": {"char": "麦", "sample": "麺", "split": "left_bottom", "ratio": 0.6, "alternatives": ["麹"]},
+        "ばくにょう2": {"char": "麥", "sample": "麩", "split": "left_bottom", "ratio": 0.6, "alternatives": ["麭"]},
     },
     
     # ===== 垂（たれ）: 上から左へ垂れる =====
@@ -232,6 +243,8 @@ PARTS_CATALOG = {
         "けいがまえ": {"char": "冂", "sample": "円", "split": "frame", "ratio": 0.45, "alternatives": ["冊", "周"]},
         "とがまえ": {"char": "戸", "sample": "房", "split": "frame", "ratio": 0.5, "alternatives": ["扉", "所"]},
         "かぜがまえ": {"char": "風", "sample": "凪", "split": "frame", "ratio": 0.5},
+        "ほこがまえ": {"char": "戈", "sample": "成", "split": "frame", "ratio": 0.5, "alternatives": ["戒", "戚"]},
+        "つつみがまえ": {"char": "勹", "sample": "勾", "split": "frame", "ratio": 0.5, "alternatives": ["匂", "包", "旬"]},
     },
 }
 

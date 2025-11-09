@@ -962,7 +962,13 @@ class PartsPreviewWindow(tk.Toplevel):
         self.preview_canvas.bind('<MouseWheel>', self._on_mousewheel_zoom)
         self.preview_canvas.bind('<Button-4>', self._on_mousewheel_zoom)  # Linux
         self.preview_canvas.bind('<Button-5>', self._on_mousewheel_zoom)  # Linux
-        
+
+        # 矢印キーでパン（ウィンドウ全体にバインド）
+        self.bind('<Up>', self._on_arrow_key)
+        self.bind('<Down>', self._on_arrow_key)
+        self.bind('<Left>', self._on_arrow_key)
+        self.bind('<Right>', self._on_arrow_key)
+
         # 編集ツール
         tools_frame = ttk.LabelFrame(right_frame, text="編集ツール", padding=5)
         tools_frame.pack(fill=tk.X, pady=5)
@@ -1276,7 +1282,8 @@ class PartsPreviewWindow(tk.Toplevel):
         new_w = int(orig_w * final_scale)
         new_h = int(orig_h * final_scale)
 
-        display_img = self.current_image.resize((new_w, new_h), Image.Resampling.NEAREST)
+        # LANCZOS補間で滑らかに拡大（ガクつき防止）
+        display_img = self.current_image.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
         # チェッカーボード背景を作成（透過部分と外側を区別）
         bg = self._create_checkerboard_bg(canvas_w, canvas_h)
@@ -1393,17 +1400,25 @@ class PartsPreviewWindow(tk.Toplevel):
         """キャンバスクリック"""
         if self.is_panning:
             return
+
         if self.eraser_mode and self.current_image:
+            # 消しゴムモード：消去
             self._save_to_undo()
             img_x, img_y = self._canvas_to_image_coords(event.x, event.y)
             self.last_erase_pos = (img_x, img_y)
             self._erase_at_image(img_x, img_y)
+        elif self.current_image:
+            # 通常モード：パン開始
+            self._on_pan_start(event)
 
     def _on_canvas_drag(self, event):
         """キャンバスドラッグ"""
         if self.is_panning:
+            self._on_pan_drag(event)
             return
+
         if self.eraser_mode and self.current_image:
+            # 消しゴムモード：消去
             img_x, img_y = self._canvas_to_image_coords(event.x, event.y)
 
             if self.last_erase_pos:
@@ -1417,13 +1432,36 @@ class PartsPreviewWindow(tk.Toplevel):
     def _on_canvas_release(self, event):
         """マウスボタン解放"""
         self.last_erase_pos = None
+        # パンモード終了
+        if self.is_panning and not self.eraser_mode:
+            self._on_pan_end(event)
+
+    def _on_arrow_key(self, event):
+        """矢印キーでパン"""
+        if not self.current_image:
+            return
+
+        # パン移動量（ピクセル）
+        pan_step = 20
+
+        if event.keysym == 'Up':
+            self.pan_offset_y += pan_step
+        elif event.keysym == 'Down':
+            self.pan_offset_y -= pan_step
+        elif event.keysym == 'Left':
+            self.pan_offset_x += pan_step
+        elif event.keysym == 'Right':
+            self.pan_offset_x -= pan_step
+
+        self._update_preview()
 
     def _on_pan_start(self, event):
         """パン開始"""
         self.is_panning = True
         self.pan_start_x = event.x
         self.pan_start_y = event.y
-        self.preview_canvas.config(cursor="fleur")
+        if not self.eraser_mode:
+            self.preview_canvas.config(cursor="fleur")
 
     def _on_pan_drag(self, event):
         """パン中"""

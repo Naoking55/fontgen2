@@ -162,6 +162,14 @@ PARTS_CATALOG = {
         "よう": {"char": "羊", "sample": "養", "split": "right", "ratio": 0.6, "alternatives": ["美", "義"]},
         "おおがね": {"char": "金", "sample": "鉱", "split": "right", "ratio": 0.6},
         "ぼく": {"char": "攴", "sample": "牧", "split": "right", "ratio": 0.65, "alternatives": ["収"]},
+
+        # 形・装飾系
+        "さんづくり": {"char": "彡", "sample": "彩", "split": "right", "ratio": 0.65, "alternatives": ["形", "影", "彫"]},
+        "のぶん": {"char": "文", "sample": "紋", "split": "right", "ratio": 0.6, "alternatives": ["斑"]},
+
+        # 自然・方向系
+        "かぜ": {"char": "風", "sample": "颯", "split": "right", "ratio": 0.55, "alternatives": ["飄"]},
+        "ほう": {"char": "方", "sample": "族", "split": "right", "ratio": 0.65, "alternatives": ["旗", "旋", "施"]},
     },
     
     # ===== 冠（かんむり）: 上側配置 =====

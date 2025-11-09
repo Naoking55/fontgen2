@@ -538,25 +538,48 @@ def trim_whitespace(img):
     return img
 
 
-def save_as_transparent_png(img, output_path):
-    """グレースケール画像を透過PNGとして保存"""
+def save_as_transparent_png(img, output_path, canvas_size=2048):
+    """グレースケール画像を2048x2048の透過PNGとして保存（中央配置）"""
     if img is None:
         return False
-    
+
     try:
+        # 2048x2048の透明キャンバスを作成
+        canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
+
+        # トリミング後の画像をRGBAに変換
         rgba = Image.new("RGBA", img.size, (0, 0, 0, 0))
         pixels = img.load()
         rgba_pixels = rgba.load()
-        
+
         for y in range(img.height):
             for x in range(img.width):
                 gray = pixels[x, y]
                 alpha = 255 - gray
                 rgba_pixels[x, y] = (0, 0, 0, alpha)
-        
-        rgba.save(output_path, "PNG")
+
+        # キャンバスの中央に配置
+        x_offset = (canvas_size - img.width) // 2
+        y_offset = (canvas_size - img.height) // 2
+        canvas.paste(rgba, (x_offset, y_offset), rgba)
+
+        # 保存
+        canvas.save(output_path, "PNG")
+
+        # サムネイルも同時に生成（100x100）
+        try:
+            thumbnail_path = output_path.replace('.png', '_thumb.png')
+            # 元の rgba 画像（トリミング済み）からサムネイル作成
+            thumb_bg = Image.new('RGB', rgba.size, (255, 255, 255))
+            thumb_bg.paste(rgba, mask=rgba.split()[3])
+            thumb_bg.thumbnail((100, 100), Image.Resampling.LANCZOS)
+            thumb_bg.save(thumbnail_path, "PNG")
+        except Exception as thumb_error:
+            print(f"[WARNING] サムネイル生成失敗: {thumb_error}")
+
         return True
-    except:
+    except Exception as e:
+        print(f"[ERROR] PNG保存失敗: {e}")
         return False
 
 # ============================================================
@@ -904,8 +927,11 @@ class PartsPreviewWindow(tk.Toplevel):
         ttk.Button(zoom_control_frame, text="↷やり直し", command=self._redo, width=10).pack(side=tk.LEFT, padx=1)
         
         # プレビューキャンバス
-        self.preview_canvas = tk.Canvas(preview_frame, width=400, height=350, bg="white", relief="sunken", borderwidth=2)
+        self.preview_canvas = tk.Canvas(preview_frame, bg="white", relief="sunken", borderwidth=2)
         self.preview_canvas.pack(fill=tk.BOTH, expand=True)
+        # リサイズ時にプレビューを更新（デバウンス付き）
+        self._resize_after_id = None
+        self.preview_canvas.bind('<Configure>', self._on_canvas_resize)
         self.preview_canvas.bind('<Button-1>', self._on_canvas_click)
         self.preview_canvas.bind('<B1-Motion>', self._on_canvas_drag)
         self.preview_canvas.bind('<ButtonRelease-1>', self._on_canvas_release)  # [ADD] 2025-10-10
@@ -1040,17 +1066,22 @@ class PartsPreviewWindow(tk.Toplevel):
         for part_name, part_data in parts.items():
             filename = part_data["file"]
             filepath = os.path.join(self.parts_dir, filename)
-            
+
             if not os.path.exists(filepath):
                 continue
-            
+
             try:
-                img = Image.open(filepath).convert('RGBA')
-                
-                bg = Image.new('RGB', img.size, (255, 255, 255))
-                bg.paste(img, mask=img.split()[3])
-                
-                bg.thumbnail((100, 100), Image.Resampling.LANCZOS)
+                # サムネイルがある場合はそれを使用（高速化）
+                thumbnail_path = filepath.replace('.png', '_thumb.png')
+                if os.path.exists(thumbnail_path):
+                    bg = Image.open(thumbnail_path).convert('RGB')
+                else:
+                    # サムネイルがない場合は従来通り生成
+                    img = Image.open(filepath).convert('RGBA')
+                    bg = Image.new('RGB', img.size, (255, 255, 255))
+                    bg.paste(img, mask=img.split()[3])
+                    bg.thumbnail((100, 100), Image.Resampling.LANCZOS)
+
                 photo = ImageTk.PhotoImage(bg)
                 self.photo_cache[part_name] = photo
                 
@@ -1174,9 +1205,17 @@ class PartsPreviewWindow(tk.Toplevel):
         """プレビュー更新"""
         if self.current_image is None:
             return
-        
-        canvas_w = 400
-        canvas_h = 350
+
+        # キャンバスの実際のサイズを取得（動的対応）
+        self.preview_canvas.update_idletasks()
+        canvas_w = self.preview_canvas.winfo_width()
+        canvas_h = self.preview_canvas.winfo_height()
+
+        # 初期化前の場合はデフォルトサイズを使用
+        if canvas_w <= 1:
+            canvas_w = 400
+        if canvas_h <= 1:
+            canvas_h = 350
         
         orig_w = self.current_image.width
         orig_h = self.current_image.height
@@ -1236,7 +1275,15 @@ class PartsPreviewWindow(tk.Toplevel):
         """マウス移動時の処理"""
         if self.eraser_mode:
             self._update_eraser_cursor_position(event.x, event.y)
-    
+
+    def _on_canvas_resize(self, event):
+        """キャンバスリサイズ時の処理（デバウンス付き）"""
+        # 既存のタイマーをキャンセル
+        if self._resize_after_id:
+            self.after_cancel(self._resize_after_id)
+        # 100ms後にプレビュー更新
+        self._resize_after_id = self.after(100, self._update_preview)
+
     def _update_eraser_cursor(self):
         """消しゴムカーソルの形状を更新"""
         pass
@@ -1434,8 +1481,13 @@ class PartsPreviewWindow(tk.Toplevel):
         filepath = os.path.join(self.parts_dir, part_data['file'])
         
         try:
+            # メインファイルとサムネイルを削除
             if os.path.exists(filepath):
                 os.remove(filepath)
+            thumbnail_path = filepath.replace('.png', '_thumb.png')
+            if os.path.exists(thumbnail_path):
+                os.remove(thumbnail_path)
+
             del self.catalog[self.current_category][self.current_part]
             self._save_catalog()
             self._display_parts_grid()

@@ -58,7 +58,7 @@ PARTS_CATALOG の各エントリの "sample" を変更してください。
 """
 
 PARTS_CATALOG = {
-    # ===== 偏（へん）: 左側配置のみ - 40種類 =====
+    # ===== 偏（へん）: 左側配置のみ =====
     "hen": {
         # 人に関する偏
         "にんべん": {"char": "亻", "sample": "仁", "split": "left", "ratio": 0.35, "alternatives": ["人", "他", "住", "作", "使"]},
@@ -76,211 +76,162 @@ PARTS_CATALOG = {
         # 木・植物に関する偏
         "きへん": {"char": "木", "sample": "林", "split": "left", "ratio": 0.4, "alternatives": ["村", "森", "桜", "松"]},
         "のぎへん": {"char": "禾", "sample": "秋", "split": "left", "ratio": 0.4, "alternatives": ["和", "私", "秀"]},
-        
+        "たけへん": {"char": "⺮", "sample": "竹", "split": "left", "ratio": 0.4, "alternatives": ["笑", "箱", "管"]},
+
         # 金属・鉱物に関する偏
-        "かねへん": {"char": "金", "sample": "鉄", "split": "left", "ratio": 0.45},
-        "いしへん": {"char": "石", "sample": "砂", "split": "left", "ratio": 0.4},
-        
+        "かねへん": {"char": "金", "sample": "鉄", "split": "left", "ratio": 0.45, "alternatives": ["銅", "銀", "鋼", "鉱"]},
+        "いしへん": {"char": "石", "sample": "砂", "split": "left", "ratio": 0.4, "alternatives": ["岩", "研", "硬", "確"]},
+
         # 糸・衣に関する偏
-        "いとへん": {"char": "糸", "sample": "結", "split": "left", "ratio": 0.45},
-        "ころもへん": {"char": "衤", "sample": "被", "split": "left", "ratio": 0.35},
-        
+        "いとへん": {"char": "糸", "sample": "結", "split": "left", "ratio": 0.45, "alternatives": ["線", "紙", "級", "紅"]},
+        "ころもへん": {"char": "衤", "sample": "被", "split": "left", "ratio": 0.35, "alternatives": ["袖", "裕", "補"]},
+
         # 食べ物に関する偏
-        "しょくへん": {"char": "飠", "sample": "館", "split": "left", "ratio": 0.4},
-        
+        "しょくへん": {"char": "飠", "sample": "館", "split": "left", "ratio": 0.4, "alternatives": ["飯", "飲", "飾"]},
+
         # 動物に関する偏
-        "けものへん": {"char": "犭", "sample": "狼", "split": "left", "ratio": 0.35},
-        "うおへん": {"char": "魚", "sample": "鮮", "split": "left", "ratio": 0.5},
-        "むしへん": {"char": "虫", "sample": "蛇", "split": "left", "ratio": 0.4},
-        
+        "けものへん": {"char": "犭", "sample": "狼", "split": "left", "ratio": 0.35, "alternatives": ["犬", "猫", "狐", "狩"]},
+        "うおへん": {"char": "魚", "sample": "鮮", "split": "left", "ratio": 0.5, "alternatives": ["鯨", "鮭", "鯛"]},
+        "むしへん": {"char": "虫", "sample": "蛇", "split": "left", "ratio": 0.4, "alternatives": ["蚊", "蝶", "蜂"]},
+
         # 土・自然に関する偏
-        "つちへん": {"char": "土", "sample": "城", "split": "left", "ratio": 0.35},
-        "やまへん": {"char": "山", "sample": "峰", "split": "left", "ratio": 0.4},
-        
+        "つちへん": {"char": "土", "sample": "城", "split": "left", "ratio": 0.35, "alternatives": ["地", "坂", "堂"]},
+        "やまへん": {"char": "山", "sample": "峰", "split": "left", "ratio": 0.4, "alternatives": ["岩", "崎", "岳"]},
+
         # 火・水に関する偏
-        "ひへん": {"char": "火", "sample": "灯", "split": "left", "ratio": 0.35},
-        "にすい": {"char": "冫", "sample": "冷", "split": "left", "ratio": 0.25},
-        
+        "ひへん": {"char": "火", "sample": "灯", "split": "left", "ratio": 0.35, "alternatives": ["焼", "炎", "煙"]},
+        "にすい": {"char": "冫", "sample": "冷", "split": "left", "ratio": 0.25, "alternatives": ["凍", "次"]},
+
         # 体の部位に関する偏
-        "にくづき": {"char": "月", "sample": "胸", "split": "left", "ratio": 0.4},
+        "にくづき": {"char": "月", "sample": "胸", "split": "left", "ratio": 0.4, "alternatives": ["胴", "腕", "脳"]},
         "ほねへん": {"char": "骨", "sample": "骸", "split": "left", "ratio": 0.5},
-        "めへん": {"char": "目", "sample": "眼", "split": "left", "ratio": 0.4},
-        "みみへん": {"char": "耳", "sample": "聴", "split": "left", "ratio": 0.4},
-        "みへん": {"char": "身", "sample": "躯", "split": "left", "ratio": 0.4},
-        
+        "めへん": {"char": "目", "sample": "眼", "split": "left", "ratio": 0.4, "alternatives": ["眠", "瞳"]},
+        "みみへん": {"char": "耳", "sample": "聴", "split": "left", "ratio": 0.4, "alternatives": ["聞", "職"]},
+        "てへん2": {"char": "手", "sample": "拳", "split": "left", "ratio": 0.4},
+
         # その他の重要な偏
-        "やまいだれへん": {"char": "疒", "sample": "病", "split": "left", "ratio": 0.3},
-        "おんなへん": {"char": "女", "sample": "妹", "split": "left", "ratio": 0.4},
-        "こざとへん": {"char": "阝", "sample": "防", "split": "left", "ratio": 0.3},
-        "しめすへん": {"char": "礻", "sample": "祈", "split": "left", "ratio": 0.35},
-        
-        # マイナーな偏
+        "おんなへん": {"char": "女", "sample": "妹", "split": "left", "ratio": 0.4, "alternatives": ["姉", "娘", "嫁"]},
+        "こざとへん": {"char": "阝", "sample": "防", "split": "left", "ratio": 0.3, "alternatives": ["陽", "阪", "院"]},
+        "しめすへん": {"char": "礻", "sample": "祈", "split": "left", "ratio": 0.35, "alternatives": ["神", "祝", "祭"]},
+
+        # 追加の偏
         "ゆみへん": {"char": "弓", "sample": "張", "split": "left", "ratio": 0.35},
         "かわへん": {"char": "革", "sample": "靴", "split": "left", "ratio": 0.45},
-        "かいへん": {"char": "貝", "sample": "販", "split": "left", "ratio": 0.4},
-        "あしへん": {"char": "足", "sample": "跡", "split": "left", "ratio": 0.45},
-        "くるまへん": {"char": "車", "sample": "輪", "split": "left", "ratio": 0.45},
-        "さけのとり": {"char": "酉", "sample": "配", "split": "left", "ratio": 0.4},
-        "うしへん": {"char": "牛", "sample": "牡", "split": "left", "ratio": 0.4},
-        "ちからへん": {"char": "力", "sample": "加", "split": "left", "ratio": 0.35},
-        "まめへん": {"char": "豆", "sample": "豉", "split": "left", "ratio": 0.4},
-        "ぶたへん": {"char": "豕", "sample": "豚", "split": "left", "ratio": 0.4},
+        "かいへん": {"char": "貝", "sample": "販", "split": "left", "ratio": 0.4, "alternatives": ["財", "貨", "貧"]},
+        "あしへん": {"char": "足", "sample": "跡", "split": "left", "ratio": 0.45, "alternatives": ["跳", "蹴", "踏"]},
+        "くるまへん": {"char": "車", "sample": "輪", "split": "left", "ratio": 0.45, "alternatives": ["軽", "転"]},
+        "さけのとり": {"char": "酉", "sample": "配", "split": "left", "ratio": 0.4, "alternatives": ["酒", "酔"]},
+        "うしへん": {"char": "牛", "sample": "牡", "split": "left", "ratio": 0.4, "alternatives": ["物", "特"]},
     },
     
-    # ===== 旁（つくり）: 右側配置のみ - 35種類 =====
+    # ===== 旁（つくり）: 右側配置のみ =====
     "tsukuri": {
         # 基本的な旁
-        "おおざと": {"char": "阝", "sample": "部", "split": "right", "ratio": 0.7},
-        "りっとう": {"char": "刂", "sample": "則", "split": "right", "ratio": 0.7},
-        "ちから": {"char": "力", "sample": "助", "split": "right", "ratio": 0.65},
-        "おおがい": {"char": "頁", "sample": "順", "split": "right", "ratio": 0.55},
-        "ぼくづくり": {"char": "攵", "sample": "政", "split": "right", "ratio": 0.65},
-        
+        "おおざと": {"char": "阝", "sample": "部", "split": "right", "ratio": 0.7, "alternatives": ["郎", "都", "郭"]},
+        "りっとう": {"char": "刂", "sample": "則", "split": "right", "ratio": 0.7, "alternatives": ["刊", "判", "削"]},
+        "ちから": {"char": "力", "sample": "助", "split": "right", "ratio": 0.65, "alternatives": ["動", "努", "勇"]},
+        "おおがい": {"char": "頁", "sample": "順", "split": "right", "ratio": 0.55, "alternatives": ["頭", "顔", "頬"]},
+        "ぼくづくり": {"char": "攵", "sample": "政", "split": "right", "ratio": 0.65, "alternatives": ["救", "敗", "教"]},
+
         # 鳥・動物系
-        "ふるとり": {"char": "隹", "sample": "雑", "split": "right", "ratio": 0.6},
-        "とり": {"char": "鳥", "sample": "鳩", "split": "right", "ratio": 0.55},
-        "うま": {"char": "馬", "sample": "駅", "split": "right", "ratio": 0.55},
-        "しか": {"char": "鹿", "sample": "麗", "split": "right", "ratio": 0.55},
-        
+        "ふるとり": {"char": "隹", "sample": "雑", "split": "right", "ratio": 0.6, "alternatives": ["集", "雀", "難"]},
+        "とり": {"char": "鳥", "sample": "鳩", "split": "right", "ratio": 0.55, "alternatives": ["鳴", "鶏"]},
+        "うま": {"char": "馬", "sample": "駅", "split": "right", "ratio": 0.55, "alternatives": ["駆", "騎", "験"]},
+
         # 武器・道具系
-        "きづくり": {"char": "斤", "sample": "新", "split": "right", "ratio": 0.65},
-        "ほこづくり": {"char": "戈", "sample": "成", "split": "right", "ratio": 0.6},
-        "おのづくり": {"char": "斤", "sample": "所", "split": "right", "ratio": 0.65},
-        "かたな": {"char": "刀", "sample": "切", "split": "right", "ratio": 0.65},
+        "きづくり": {"char": "斤", "sample": "新", "split": "right", "ratio": 0.65, "alternatives": ["断", "斬"]},
+        "ほこづくり": {"char": "戈", "sample": "成", "split": "right", "ratio": 0.6, "alternatives": ["戦", "戯"]},
+        "かたな": {"char": "刀", "sample": "切", "split": "right", "ratio": 0.65, "alternatives": ["分", "列"]},
         "ほこ": {"char": "殳", "sample": "殴", "split": "right", "ratio": 0.6},
-        
-        # 文字・記号系
-        "ふでづくり": {"char": "聿", "sample": "律", "split": "right", "ratio": 0.6},
-        "ぼく": {"char": "攴", "sample": "牧", "split": "right", "ratio": 0.65},
-        "おおざと右": {"char": "邑", "sample": "郎", "split": "right", "ratio": 0.6},
-        
+
         # 自然・天体系
-        "おうへん": {"char": "王", "sample": "珠", "split": "right", "ratio": 0.6},
-        "つき": {"char": "月", "sample": "朝", "split": "right", "ratio": 0.6},
-        "ひ": {"char": "日", "sample": "旧", "split": "right", "ratio": 0.6},
-        "かぜ": {"char": "風", "sample": "颯", "split": "right", "ratio": 0.55},
-        
+        "つき": {"char": "月", "sample": "朝", "split": "right", "ratio": 0.6, "alternatives": ["期", "明"]},
+        "ひ": {"char": "日", "sample": "旧", "split": "right", "ratio": 0.6, "alternatives": ["時", "昭"]},
+
         # 体・感覚系
-        "みる": {"char": "見", "sample": "規", "split": "right", "ratio": 0.6},
-        "きく": {"char": "音", "sample": "韻", "split": "right", "ratio": 0.55},
-        "あくび": {"char": "欠", "sample": "歌", "split": "right", "ratio": 0.65},
-        
+        "みる": {"char": "見", "sample": "規", "split": "right", "ratio": 0.6, "alternatives": ["視", "覧", "観"]},
+        "おと": {"char": "音", "sample": "韻", "split": "right", "ratio": 0.55, "alternatives": ["章"]},
+        "あくび": {"char": "欠", "sample": "歌", "split": "right", "ratio": 0.65, "alternatives": ["次", "欧"]},
+
         # 食物・植物系
-        "むぎ": {"char": "麦", "sample": "麺", "split": "right", "ratio": 0.55},
-        "まめ": {"char": "豆", "sample": "豊", "split": "right", "ratio": 0.6},
-        
+        "むぎ": {"char": "麦", "sample": "麺", "split": "right", "ratio": 0.55, "alternatives": ["麹"]},
+
         # その他
-        "おおがい頁": {"char": "頁", "sample": "頭", "split": "right", "ratio": 0.55},
-        "おに": {"char": "鬼", "sample": "魅", "split": "right", "ratio": 0.55},
-        "かい右": {"char": "貝", "sample": "頁", "split": "right", "ratio": 0.6},
-        "ふ": {"char": "阜", "sample": "陸", "split": "right", "ratio": 0.6},
-        
-        # 複合系
-        "けん": {"char": "見", "sample": "視", "split": "right", "ratio": 0.6},
-        "せい": {"char": "斉", "sample": "済", "split": "right", "ratio": 0.6},
-        "き": {"char": "气", "sample": "気", "split": "right", "ratio": 0.6},
-        "しゅう": {"char": "隹", "sample": "集", "split": "right", "ratio": 0.6},
-        "よう": {"char": "羊", "sample": "養", "split": "right", "ratio": 0.6},
+        "おに": {"char": "鬼", "sample": "魅", "split": "right", "ratio": 0.55, "alternatives": ["魂", "魔"]},
+        "ふでづくり": {"char": "聿", "sample": "律", "split": "right", "ratio": 0.6, "alternatives": ["建", "筆"]},
+        "よう": {"char": "羊", "sample": "養", "split": "right", "ratio": 0.6, "alternatives": ["美", "義"]},
+        "おおがね": {"char": "金", "sample": "鉱", "split": "right", "ratio": 0.6},
+        "ぼく": {"char": "攴", "sample": "牧", "split": "right", "ratio": 0.65, "alternatives": ["収"]},
     },
     
-    # ===== 冠（かんむり）: 上側配置 - 28種類 =====
+    # ===== 冠（かんむり）: 上側配置 =====
     "kanmuri": {
         # 植物に関する冠
-        "くさかんむり": {"char": "艹", "sample": "花", "split": "top", "ratio": 0.3},
-        "たけかんむり": {"char": "⺮", "sample": "笑", "split": "top", "ratio": 0.35},
-        
+        "くさかんむり": {"char": "艹", "sample": "花", "split": "top", "ratio": 0.3, "alternatives": ["草", "茶", "英", "菜"]},
+        "たけかんむり": {"char": "⺮", "sample": "笑", "split": "top", "ratio": 0.35, "alternatives": ["竹", "筆", "箱"]},
+
         # 自然・天候に関する冠
-        "あめかんむり": {"char": "雨", "sample": "雷", "split": "top", "ratio": 0.4},
-        "やまかんむり": {"char": "山", "sample": "崩", "split": "top", "ratio": 0.35},
-        
+        "あめかんむり": {"char": "雨", "sample": "雷", "split": "top", "ratio": 0.4, "alternatives": ["雪", "雲", "電"]},
+
         # 建物・覆うものに関する冠
-        "うかんむり": {"char": "宀", "sample": "宇", "split": "top", "ratio": 0.25},
-        "あなかんむり": {"char": "穴", "sample": "空", "split": "top", "ratio": 0.35},
-        "わかんむり": {"char": "冖", "sample": "冠", "split": "top", "ratio": 0.25},
-        
+        "うかんむり": {"char": "宀", "sample": "宇", "split": "top", "ratio": 0.25, "alternatives": ["宙", "宝", "家", "安"]},
+        "あなかんむり": {"char": "穴", "sample": "空", "split": "top", "ratio": 0.35, "alternatives": ["究", "窓"]},
+        "わかんむり": {"char": "冖", "sample": "冠", "split": "top", "ratio": 0.25, "alternatives": ["冬", "冷"]},
+
         # 網・枠に関する冠
-        "あみがしら": {"char": "罒", "sample": "買", "split": "top", "ratio": 0.3},
+        "あみがしら": {"char": "罒", "sample": "買", "split": "top", "ratio": 0.3, "alternatives": ["罪", "置"]},
         "よこめ": {"char": "⺫", "sample": "置", "split": "top", "ratio": 0.3},
-        
+
         # 形・記号的な冠
-        "なべぶた": {"char": "亠", "sample": "市", "split": "top", "ratio": 0.2},
-        "はちがしら": {"char": "八", "sample": "公", "split": "top", "ratio": 0.25},
-        "ひとやね": {"char": "𠆢", "sample": "会", "split": "top", "ratio": 0.2},
-        "つめかんむり": {"char": "爫", "sample": "受", "split": "top", "ratio": 0.3},
-        "てんてん": {"char": "⺀", "sample": "当", "split": "top", "ratio": 0.25},
-        
+        "なべぶた": {"char": "亠", "sample": "市", "split": "top", "ratio": 0.2, "alternatives": ["京", "享", "亡"]},
+        "はちがしら": {"char": "八", "sample": "公", "split": "top", "ratio": 0.25, "alternatives": ["六", "共"]},
+        "ひとやね": {"char": "𠆢", "sample": "会", "split": "top", "ratio": 0.2, "alternatives": ["合", "令"]},
+        "つめかんむり": {"char": "爫", "sample": "受", "split": "top", "ratio": 0.3, "alternatives": ["愛", "採"]},
+
         # その他の冠
-        "しょうがしら": {"char": "⺌", "sample": "尚", "split": "top", "ratio": 0.25},
-        "だいかんむり": {"char": "大", "sample": "奇", "split": "top", "ratio": 0.3},
-        "ひとがしら": {"char": "人", "sample": "介", "split": "top", "ratio": 0.25},
-        "けいがしら": {"char": "⺕", "sample": "前", "split": "top", "ratio": 0.3},
+        "だいかんむり": {"char": "大", "sample": "奇", "split": "top", "ratio": 0.3, "alternatives": ["奈", "奔"]},
+        "ひとがしら": {"char": "人", "sample": "介", "split": "top", "ratio": 0.25, "alternatives": ["今", "傘"]},
         "おいがしら": {"char": "老", "sample": "考", "split": "top", "ratio": 0.35},
         "ちいさい": {"char": "小", "sample": "尖", "split": "top", "ratio": 0.3},
-        "そうにょう": {"char": "⺍", "sample": "学", "split": "top", "ratio": 0.25},
-        "なつあし上": {"char": "夂", "sample": "条", "split": "top", "ratio": 0.3},
-        "かぜがまえ": {"char": "風", "sample": "風", "split": "top", "ratio": 0.4},
-        "おおいかんむり": {"char": "覀", "sample": "要", "split": "top", "ratio": 0.35},
-        "あめ": {"char": "雨", "sample": "雪", "split": "top", "ratio": 0.4},
-        "くち上": {"char": "口", "sample": "吉", "split": "top", "ratio": 0.3},
-        "つち上": {"char": "土", "sample": "吉", "split": "top", "ratio": 0.3},
-        "くさ": {"char": "艸", "sample": "草", "split": "top", "ratio": 0.3},
+        "そうにょう": {"char": "⺍", "sample": "学", "split": "top", "ratio": 0.25, "alternatives": ["党", "堂"]},
+        "おおいかんむり": {"char": "覀", "sample": "要", "split": "top", "ratio": 0.35, "alternatives": ["覆"]},
     },
     
-    # ===== 脚（あし）: 下側配置 - 12種類 =====
+    # ===== 脚（あし）: 下側配置 =====
     "ashi": {
-        "こころ": {"char": "心", "sample": "念", "split": "bottom", "ratio": 0.65},
-        "れっか": {"char": "灬", "sample": "熱", "split": "bottom", "ratio": 0.75},
-        "ひとあし": {"char": "儿", "sample": "児", "split": "bottom", "ratio": 0.7},
-        "したごころ": {"char": "心", "sample": "恋", "split": "bottom", "ratio": 0.7},
+        "こころ": {"char": "心", "sample": "念", "split": "bottom", "ratio": 0.65, "alternatives": ["恋", "慕", "思"]},
+        "れっか": {"char": "灬", "sample": "熱", "split": "bottom", "ratio": 0.75, "alternatives": ["煮", "点", "煎", "黒"]},
+        "ひとあし": {"char": "儿", "sample": "児", "split": "bottom", "ratio": 0.7, "alternatives": ["兄", "元", "光"]},
+        "さら": {"char": "皿", "sample": "盛", "split": "bottom", "ratio": 0.7, "alternatives": ["益", "盗"]},
         "したみず": {"char": "水", "sample": "泰", "split": "bottom", "ratio": 0.7},
-        "さら": {"char": "皿", "sample": "盛", "split": "bottom", "ratio": 0.7},
-        "こうあし": {"char": "儿", "sample": "兄", "split": "bottom", "ratio": 0.7},
-        "したひ": {"char": "灬", "sample": "煮", "split": "bottom", "ratio": 0.75},
-        "かい": {"char": "貝", "sample": "買", "split": "bottom", "ratio": 0.65},
-        "こころあし": {"char": "心", "sample": "慕", "split": "bottom", "ratio": 0.7},
-        "したしたごころ": {"char": "灬", "sample": "点", "split": "bottom", "ratio": 0.75},
-        "れんが": {"char": "灬", "sample": "煎", "split": "bottom", "ratio": 0.75},
     },
     
-    # ===== 繞（にょう）: 左下を囲む - 5種類 =====
+    # ===== 繞（にょう）: 左下を囲む =====
     "nyou": {
-        "しんにょう": {"char": "辶", "sample": "近", "split": "left_bottom", "ratio": 0.6},
-        "えんにょう": {"char": "廴", "sample": "延", "split": "left_bottom", "ratio": 0.55},
-        "そうにょう走": {"char": "走", "sample": "起", "split": "left_bottom", "ratio": 0.65},
-        "えんにょう廴": {"char": "廴", "sample": "建", "split": "left_bottom", "ratio": 0.55},
-        "かんにょう": {"char": "⻎", "sample": "道", "split": "left_bottom", "ratio": 0.65},
+        "しんにょう": {"char": "辶", "sample": "近", "split": "left_bottom", "ratio": 0.6, "alternatives": ["道", "進", "通", "遠"]},
+        "えんにょう": {"char": "廴", "sample": "延", "split": "left_bottom", "ratio": 0.55, "alternatives": ["建", "廷"]},
+        "そうにょう": {"char": "走", "sample": "起", "split": "left_bottom", "ratio": 0.65},
     },
     
-    # ===== 垂（たれ）: 上から左へ垂れる - 10種類 =====
+    # ===== 垂（たれ）: 上から左へ垂れる =====
     "tare": {
-        "がんだれ": {"char": "厂", "sample": "原", "split": "top_left", "ratio": 0.5},
-        "まだれ": {"char": "广", "sample": "広", "split": "top_left", "ratio": 0.45},
-        "やまいだれ": {"char": "疒", "sample": "痛", "split": "top_left", "ratio": 0.45},
+        "がんだれ": {"char": "厂", "sample": "原", "split": "top_left", "ratio": 0.5, "alternatives": ["厚", "雁", "厳"]},
+        "まだれ": {"char": "广", "sample": "広", "split": "top_left", "ratio": 0.45, "alternatives": ["店", "座", "庁"]},
+        "やまいだれ": {"char": "疒", "sample": "痛", "split": "top_left", "ratio": 0.45, "alternatives": ["病", "痩", "療"]},
+        "しかばねだれ": {"char": "尸", "sample": "局", "split": "top_left", "ratio": 0.45, "alternatives": ["屋", "屍", "居"]},
         "とだれ": {"char": "戶", "sample": "戻", "split": "top_left", "ratio": 0.5},
-        "しかばねだれ": {"char": "尸", "sample": "局", "split": "top_left", "ratio": 0.45},
-        "かばねだれ": {"char": "尸", "sample": "屋", "split": "top_left", "ratio": 0.45},
-        "とびがしら": {"char": "飛", "sample": "飛", "split": "top_left", "ratio": 0.5},
-        "いわだれ": {"char": "厂", "sample": "厚", "split": "top_left", "ratio": 0.45},
-        "たれ": {"char": "广", "sample": "店", "split": "top_left", "ratio": 0.45},
-        "がんだれ厂": {"char": "厂", "sample": "雁", "split": "top_left", "ratio": 0.5},
     },
     
-    # ===== 構（かまえ）: 周りを囲む - 14種類 =====
+    # ===== 構（かまえ）: 周りを囲む =====
     "kamae": {
-        "もんがまえ": {"char": "門", "sample": "間", "split": "frame", "ratio": 0.5},
-        "くにがまえ": {"char": "囗", "sample": "国", "split": "frame", "ratio": 0.5},
-        "どうがまえ": {"char": "行", "sample": "衛", "split": "frame", "ratio": 0.5},
+        "もんがまえ": {"char": "門", "sample": "間", "split": "frame", "ratio": 0.5, "alternatives": ["門", "問", "開"]},
+        "くにがまえ": {"char": "囗", "sample": "国", "split": "frame", "ratio": 0.5, "alternatives": ["四", "回", "囲"]},
+        "ぎょうがまえ": {"char": "行", "sample": "衛", "split": "frame", "ratio": 0.5},
         "かくしがまえ": {"char": "匸", "sample": "匹", "split": "frame", "ratio": 0.5},
-        "はこがまえ": {"char": "匚", "sample": "匠", "split": "frame", "ratio": 0.45},
-        "けいがまえ": {"char": "冂", "sample": "円", "split": "frame", "ratio": 0.45},
-        "もんがまえ門": {"char": "門", "sample": "門", "split": "frame", "ratio": 0.5},
-        "とうがまえ": {"char": "鬨", "sample": "鬥", "split": "frame", "ratio": 0.5},
-        "くがまえ": {"char": "句", "sample": "句", "split": "frame", "ratio": 0.45},
-        "とかまえ": {"char": "戸", "sample": "房", "split": "frame", "ratio": 0.5},
-        "むじなへん": {"char": "鬼", "sample": "魂", "split": "frame", "ratio": 0.55},
-        "しきがまえ": {"char": "式", "sample": "式", "split": "frame", "ratio": 0.5},
+        "はこがまえ": {"char": "匚", "sample": "匠", "split": "frame", "ratio": 0.45, "alternatives": ["区", "医"]},
+        "けいがまえ": {"char": "冂", "sample": "円", "split": "frame", "ratio": 0.45, "alternatives": ["冊", "周"]},
+        "とがまえ": {"char": "戸", "sample": "房", "split": "frame", "ratio": 0.5, "alternatives": ["扉", "所"]},
         "かぜがまえ": {"char": "風", "sample": "凪", "split": "frame", "ratio": 0.5},
-        "とがまえ": {"char": "戸", "sample": "扉", "split": "frame", "ratio": 0.5},
     },
 }
 
@@ -808,11 +759,11 @@ def extract_all_parts(font_path, output_dir, progress_callback=None, log_callbac
 # ============================================================
 
 class PartsPreviewWindow(tk.Toplevel):
-    """パーツプレビュー・編集ウィンドウ"""
-    
+    """偏旁エディタウィンドウ"""
+
     def __init__(self, parent, parts_dir, font_path):
         super().__init__(parent)
-        self.title("パーツプレビュー・編集")
+        self.title("偏旁エディタ")
         self.geometry("1500x850")
         
         self.parts_dir = parts_dir
@@ -827,7 +778,8 @@ class PartsPreviewWindow(tk.Toplevel):
         self.eraser_shape = 'circle'
         self.current_image = None
         self.modified = False
-        
+        self.current_split_type = 'left'  # デフォルトの分割タイプ
+
         self.undo_stack = []
         self.redo_stack = []
         
@@ -1007,9 +959,9 @@ class PartsPreviewWindow(tk.Toplevel):
         button_frame = ttk.Frame(tools_frame)
         button_frame.pack(fill=tk.X, pady=5)
         
-        ttk.Button(button_frame, text="再抽出", command=self._re_extract, width=10).pack(side=tk.LEFT, padx=2)
-        ttk.Button(button_frame, text="保存", command=self._save_current, width=10).pack(side=tk.LEFT, padx=2)
-        ttk.Button(button_frame, text="削除", command=self._delete_current, width=10).pack(side=tk.LEFT, padx=2)
+        ttk.Button(button_frame, text="🔄 再抽出", command=self._re_extract, width=12).pack(side=tk.LEFT, padx=2)
+        ttk.Button(button_frame, text="💾 保存", command=self._save_current, width=12).pack(side=tk.LEFT, padx=2)
+        ttk.Button(button_frame, text="🗑️ 削除", command=self._delete_current, width=12).pack(side=tk.LEFT, padx=2)
         
         # キーボードショートカット
         self.bind('<Control-z>', lambda e: self._undo())

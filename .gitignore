@@ -39,3 +39,5 @@ Thumbs.db
 # Project specific
 assets/parts/
 *.fep
+*.bak
+*.backup

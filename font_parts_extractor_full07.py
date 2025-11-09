@@ -1,8 +1,8 @@
 ﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-偏旁抽出ツール - 完全版 GUI v2.8 (2025-10-10)
-消しゴム補間機能追加
+偏旁抽出ツール - 完全版 GUI v2.9 (2025-11-09)
+動的境界検出アルゴリズム統合 + 2048x2048解像度対応
 """
 
 import os
@@ -14,9 +14,28 @@ from pathlib import Path
 from PIL import Image, ImageFont, ImageDraw, ImageOps, ImageTk
 import threading
 import math  # [ADD] 2025-10-10: 補間計算用
+import numpy as np  # [ADD] 2025-11-09: 動的境界検出用
+from typing import List, Tuple, Dict, Optional
 
 # macOS対策
 os.environ['TK_SILENCE_DEPRECATION'] = '1'
+
+# ============================================================
+# [CONFIG] 設定 (2025-11-09)
+# ============================================================
+
+class Config:
+    """偏旁抽出ツールの設定"""
+
+    # ===== 動的境界検出設定 (2025-11-09) =====
+    DYNAMIC_BOUNDARY_DETECTION = True  # 動的境界検出を有効にする
+    BOUNDARY_SEARCH_RANGE_LR = (0.25, 0.75)  # 左右分割の探索範囲
+    BOUNDARY_SEARCH_RANGE_TB = (0.25, 0.75)  # 上下分割の探索範囲
+    BOUNDARY_SCAN_STEP = 0.02  # スキャンステップ（2%刻み）
+    BINARY_THRESHOLD = 200  # 二値化閾値
+
+    # ===== レンダリング設定 (2025-11-09) =====
+    RENDER_SIZE = 2048  # 文字レンダリング解像度 (2048x2048)
 
 # ============================================================
 # [BLOCK1-BEGIN] 偏旁カタログ (2025-10-10)
@@ -42,21 +61,21 @@ PARTS_CATALOG = {
     # ===== 偏（へん）: 左側配置のみ - 40種類 =====
     "hen": {
         # 人に関する偏
-        "にんべん": {"char": "亻", "sample": "仁", "split": "left", "ratio": 0.35},
-        "ぎょうにんべん": {"char": "彳", "sample": "行", "split": "left", "ratio": 0.3},
-        "りっしんべん": {"char": "忄", "sample": "情", "split": "left", "ratio": 0.3},
-        
+        "にんべん": {"char": "亻", "sample": "仁", "split": "left", "ratio": 0.35, "alternatives": ["人", "他", "住", "作", "使"]},
+        "ぎょうにんべん": {"char": "彳", "sample": "行", "split": "left", "ratio": 0.3, "alternatives": ["往", "待", "役"]},
+        "りっしんべん": {"char": "忄", "sample": "情", "split": "left", "ratio": 0.3, "alternatives": ["性", "怖", "悩", "快"]},
+
         # 手・動作に関する偏
-        "てへん": {"char": "扌", "sample": "持", "split": "left", "ratio": 0.35},
-        "さんずい": {"char": "氵", "sample": "海", "split": "left", "ratio": 0.3},
-        
+        "てへん": {"char": "扌", "sample": "持", "split": "left", "ratio": 0.35, "alternatives": ["手", "打", "投", "押", "拾"]},
+        "さんずい": {"char": "氵", "sample": "海", "split": "left", "ratio": 0.3, "alternatives": ["江", "河", "波", "池", "湖"]},
+
         # 言葉に関する偏
-        "ごんべん": {"char": "訁", "sample": "語", "split": "left", "ratio": 0.4},
-        "くちへん": {"char": "口", "sample": "呼", "split": "left", "ratio": 0.4},
-        
+        "ごんべん": {"char": "訁", "sample": "語", "split": "left", "ratio": 0.4, "alternatives": ["話", "説", "訳", "記", "論"]},
+        "くちへん": {"char": "口", "sample": "呼", "split": "left", "ratio": 0.4, "alternatives": ["味", "吸", "鳴", "唱"]},
+
         # 木・植物に関する偏
-        "きへん": {"char": "木", "sample": "林", "split": "left", "ratio": 0.4},
-        "のぎへん": {"char": "禾", "sample": "秋", "split": "left", "ratio": 0.4},
+        "きへん": {"char": "木", "sample": "林", "split": "left", "ratio": 0.4, "alternatives": ["村", "森", "桜", "松"]},
+        "のぎへん": {"char": "禾", "sample": "秋", "split": "left", "ratio": 0.4, "alternatives": ["和", "私", "秀"]},
         
         # 金属・鉱物に関する偏
         "かねへん": {"char": "金", "sample": "鉄", "split": "left", "ratio": 0.45},
@@ -270,6 +289,121 @@ PARTS_CATALOG = {
 # ============================================================
 
 
+# ============================================================
+# [DYNAMIC-BOUNDARY] 動的境界検出アルゴリズム (2025-11-09)
+# ============================================================
+
+class DynamicBoundaryDetector:
+    """動的境界検出器 - 画像解析で最適な分割位置を自動検出（v1.82.9）"""
+
+    def __init__(self, binary_threshold: int = 200):
+        self.binary_threshold = binary_threshold
+
+    def find_optimal_split(self, img: Image.Image, direction: str = "vertical",
+                          search_range: Tuple[float, float] = (0.3, 0.7),
+                          num_candidates: int = 3) -> List[Tuple[float, float, Dict]]:
+        """
+        最適な分割位置を検出
+
+        Args:
+            img: 入力画像
+            direction: "vertical" (左右分割) or "horizontal" (上下分割)
+            search_range: 探索範囲 (min_ratio, max_ratio)
+            num_candidates: 返す候補数
+
+        Returns:
+            [(ratio, score, info), ...] のリスト
+            - ratio: 分割比率（0.0～1.0）
+            - score: スコア（低いほど境界らしい）
+            - info: 詳細情報
+        """
+        w, h = img.size
+        img_array = np.array(img)
+        binary = img_array < self.binary_threshold
+
+        candidates = []
+
+        if direction == "vertical":
+            # 縦方向に走査（左右分割）
+            for ratio in np.arange(search_range[0], search_range[1], Config.BOUNDARY_SCAN_STEP):
+                x = int(w * ratio)
+                if x <= 0 or x >= w:
+                    continue
+
+                # この位置での垂直線上の黒ピクセル密度
+                line = binary[:, x]
+                density = np.sum(line) / h
+
+                # 周辺の密度変化も考慮（境界っぽさを強調）
+                edge_score = self._calculate_edge_score(binary, x, "vertical")
+
+                # 総合スコア（密度が低く、エッジが強いほど良い）
+                score = density * 0.7 + (1.0 - edge_score) * 0.3
+
+                candidates.append((ratio, score, {
+                    'density': density,
+                    'edge_score': edge_score,
+                    'position': x
+                }))
+        else:
+            # 横方向に走査（上下分割）
+            for ratio in np.arange(search_range[0], search_range[1], Config.BOUNDARY_SCAN_STEP):
+                y = int(h * ratio)
+                if y <= 0 or y >= h:
+                    continue
+
+                line = binary[y, :]
+                density = np.sum(line) / w
+
+                edge_score = self._calculate_edge_score(binary, y, "horizontal")
+
+                score = density * 0.7 + (1.0 - edge_score) * 0.3
+
+                candidates.append((ratio, score, {
+                    'density': density,
+                    'edge_score': edge_score,
+                    'position': y
+                }))
+
+        # スコアが低い順（境界らしい順）にソート
+        candidates.sort(key=lambda x: x[1])
+
+        # トップN候補を返す
+        return candidates[:num_candidates]
+
+    def _calculate_edge_score(self, binary: np.ndarray, position: int, direction: str) -> float:
+        """エッジスコアを計算（境界の強さ）"""
+        h, w = binary.shape
+
+        if direction == "vertical":
+            if position <= 2 or position >= w - 3:
+                return 0.0
+
+            # 左右の密度差
+            left_region = binary[:, max(0, position - 5):position]
+            right_region = binary[:, position:min(w, position + 5)]
+
+            left_density = np.sum(left_region) / (left_region.size + 1e-8)
+            right_density = np.sum(right_region) / (right_region.size + 1e-8)
+
+            # 密度差が大きいほど境界らしい
+            edge_strength = abs(left_density - right_density)
+
+            return edge_strength
+        else:
+            if position <= 2 or position >= h - 3:
+                return 0.0
+
+            top_region = binary[max(0, position - 5):position, :]
+            bottom_region = binary[position:min(h, position + 5), :]
+
+            top_density = np.sum(top_region) / (top_region.size + 1e-8)
+            bottom_density = np.sum(bottom_region) / (bottom_region.size + 1e-8)
+
+            edge_strength = abs(top_density - bottom_density)
+
+            return edge_strength
+
 
 
 
@@ -283,8 +417,10 @@ PARTS_CATALOG = {
 # [BLOCK2-BEGIN] 画像処理ユーティリティ (2025-10-10)
 # ============================================================
 
-def render_char_to_bitmap(char, font_path, size=1024):
+def render_char_to_bitmap(char, font_path, size=None):
     """文字をビットマップにレンダリング"""
+    if size is None:
+        size = Config.RENDER_SIZE
     try:
         font = ImageFont.truetype(font_path, size)
         img = Image.new("L", (size, size), 255)
@@ -469,33 +605,85 @@ def save_as_transparent_png(img, output_path):
 # [BLOCK3-BEGIN] パーツ抽出コア処理 (2025-10-10)
 # ============================================================
 
-def extract_single_part(font_path, part_name, part_info, output_path, noise_removal=True):
-    """単一パーツを抽出"""
+def extract_single_part(font_path, part_name, part_info, output_path, noise_removal=True, log_callback=None):
+    """単一パーツを抽出（動的境界検出対応）"""
     try:
-        sample_char = part_info["sample"]
         split_type = part_info["split"]
         ratio = part_info.get("ratio", 0.5)
-        
-        img = render_char_to_bitmap(sample_char, font_path)
+
+        # 試行する文字のリスト（プライマリ + 代替文字）
+        candidates = [part_info["sample"]]
+        if "alternatives" in part_info:
+            candidates.extend(part_info["alternatives"])
+
+        # 各候補でレンダリングを試行
+        img = None
+        used_char = None
+        for candidate_char in candidates:
+            img = render_char_to_bitmap(candidate_char, font_path)
+            if img is not None:
+                used_char = candidate_char
+                break
+
+        # 全ての候補で失敗した場合
         if img is None:
-            return False, None, "レンダリング失敗"
-        
-        part_img = split_glyph(img, split_type, ratio)
+            return False, None, "レンダリング失敗（全ての代替文字でも失敗）", None, ratio
+
+        # 動的境界検出（オプション機能）
+        used_ratio = ratio
+        dynamic_detection_used = False
+        dynamic_detection_error = None
+
+        if Config.DYNAMIC_BOUNDARY_DETECTION:
+            try:
+                detector = DynamicBoundaryDetector(binary_threshold=Config.BINARY_THRESHOLD)
+
+                # split_typeから方向を決定
+                if split_type in ["left", "right"]:
+                    direction = "vertical"
+                    search_range = Config.BOUNDARY_SEARCH_RANGE_LR
+                elif split_type in ["top", "bottom"]:
+                    direction = "horizontal"
+                    search_range = Config.BOUNDARY_SEARCH_RANGE_TB
+                else:
+                    # frame, left_bottom, top_left は動的検出非対応（固定ratioを使用）
+                    direction = None
+
+                if direction:
+                    # 最適な分割位置を検出
+                    candidates_dynamic = detector.find_optimal_split(img, direction, search_range, num_candidates=1)
+                    if candidates_dynamic:
+                        old_ratio = used_ratio
+                        used_ratio = candidates_dynamic[0][0]  # トップ候補のratio
+                        dynamic_detection_used = True
+                        if log_callback and abs(used_ratio - old_ratio) > 0.01:
+                            log_callback(f"    [動的検出] {part_name}: {old_ratio:.3f} → {used_ratio:.3f}")
+            except Exception as e:
+                # 動的検出に失敗した場合は固定ratioを使用
+                dynamic_detection_error = str(e)
+                if log_callback:
+                    log_callback(f"    [動的検出エラー] {part_name}: {e}")
+
+        # 分割処理
+        part_img = split_glyph(img, split_type, used_ratio)
         if part_img is None:
-            return False, None, "分割失敗"
-        
+            return False, None, "分割失敗", used_char, used_ratio
+
+        # ノイズ除去
         if noise_removal:
             part_img = remove_noise(part_img)
-        
+
+        # 余白トリミング
         part_img = trim_whitespace(part_img)
-        
+
+        # 保存
         if save_as_transparent_png(part_img, output_path):
-            return True, part_img, None
+            return True, part_img, None, used_char, used_ratio
         else:
-            return False, None, "保存失敗"
-            
+            return False, None, "保存失敗", used_char, used_ratio
+
     except Exception as e:
-        return False, None, str(e)
+        return False, None, str(e), None, ratio
 
 
 def extract_all_parts(font_path, output_dir, progress_callback=None, log_callback=None):
@@ -554,23 +742,26 @@ def extract_all_parts(font_path, output_dir, progress_callback=None, log_callbac
             output_path = os.path.join(output_dir, filename)
             
             msg = f"  {part_name} ({part_info['char']}) [例: {part_info['sample']}]"
-            
+
             if progress_callback:
                 progress_callback(current_idx, total_parts, f"{part_name} 処理中...")
-            
-            success, img, error = extract_single_part(font_path, part_name, part_info, output_path)
-            
+
+            success, img, error, used_char, used_ratio = extract_single_part(
+                font_path, part_name, part_info, output_path, log_callback=log
+            )
+
             if success:
                 log(f"{msg} ... ✅ 保存完了")
                 stats["success"] += 1
                 category_stats["success"] += 1
-                
+
                 catalog_json[category][part_name] = {
                     "char": part_info["char"],
                     "sample": part_info["sample"],
                     "file": filename,
                     "split": part_info["split"],
-                    "ratio": part_info.get("ratio", 0.5)
+                    "ratio": part_info.get("ratio", 0.5),
+                    "used_ratio": used_ratio  # 実際に使用された分割比率を記録
                 }
             else:
                 log(f"{msg} ... ❌ {error}")
@@ -1207,15 +1398,15 @@ class PartsPreviewWindow(tk.Toplevel):
         
         filename = part_data["file"]
         output_path = os.path.join(self.parts_dir, filename)
-        
-        success, img, error = extract_single_part(
+
+        success, img, error, used_char, used_ratio = extract_single_part(
             self.font_path,
             self.current_part,
             part_info,
             output_path,
             noise_removal=self.noise_removal_var.get()
         )
-        
+
         if success:
             img_rgba = Image.open(output_path).convert('RGBA')
             bg = Image.new('L', img_rgba.size, 255)
@@ -1310,7 +1501,7 @@ class PartsExtractorGUI:
     
     def __init__(self, root):
         self.root = root
-        self.root.title("偏旁抽出ツール v2.8 (2025-10-10) - 補間描画対応")
+        self.root.title("偏旁抽出ツール v2.9 (2025-11-09) - 動的境界検出 + 2048解像度対応")
         
         self.font_path = None
         self.output_dir = "assets/parts"
@@ -1364,12 +1555,18 @@ class PartsExtractorGUI:
             font=("Monaco", 10) if sys.platform == "darwin" else ("Consolas", 9)
         )
         self.log_text.pack(fill=tk.BOTH, expand=True)
-        
-        self._log("偏旁抽出ツール v2.8 - 補間描画対応")
+
+        self._log("偏旁抽出ツール v2.9 - 動的境界検出 + 2048解像度対応")
         self._log("=" * 70)
         self._log("【更新内容】")
-        self._log("  ✅ 消しゴム補間描画: デコボコを大幅軽減")
-        self._log("  ✅ 滑らかな消去が可能に")
+        self._log("  ✅ 動的境界検出アルゴリズム統合")
+        self._log("     - 画像解析で最適な分割位置を自動検出")
+        self._log("     - 密度スキャン + エッジ検出による高精度抽出")
+        self._log("  ✅ レンダリング解像度を2048x2048に向上")
+        self._log("     - より高品質なパーツ抽出が可能に")
+        self._log(f"  🔧 動的境界検出: {'有効' if Config.DYNAMIC_BOUNDARY_DETECTION else '無効'}")
+        self._log(f"  📐 探索範囲(左右): {Config.BOUNDARY_SEARCH_RANGE_LR}")
+        self._log(f"  📐 探索範囲(上下): {Config.BOUNDARY_SEARCH_RANGE_TB}")
         self._log("=" * 70)
     
     def _select_font(self):

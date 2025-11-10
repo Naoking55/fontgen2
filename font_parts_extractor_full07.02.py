@@ -389,25 +389,28 @@ class DynamicBoundaryDetector:
 # [BLOCK2-BEGIN] 画像処理ユーティリティ (2025-10-10)
 # ============================================================
 
-def render_char_to_bitmap(char, font_path, size=None):
-    """文字をビットマップにレンダリング"""
+def render_char_to_bitmap(char, font_path, size=None, font_index=0):
+    """文字をビットマップにレンダリング（TTC対応）"""
     if size is None:
         size = Config.RENDER_SIZE
     try:
-        font = ImageFont.truetype(font_path, size)
+        # TTCファイル対応：indexパラメータを追加
+        font = ImageFont.truetype(font_path, size, index=font_index)
         img = Image.new("L", (size, size), 255)
         draw = ImageDraw.Draw(img)
-        
+
         bbox = draw.textbbox((0, 0), char, font=font)
         w = bbox[2] - bbox[0]
         h = bbox[3] - bbox[1]
-        
+
         x = (size - w) / 2 - bbox[0]
         y = (size - h) / 2 - bbox[1]
-        
+
         draw.text((x, y), char, fill=0, font=font)
         return img
-    except:
+    except Exception as e:
+        # エラー詳細をログに出力
+        print(f"[ERROR] render_char_to_bitmap: {e}")
         return None
 
 
@@ -600,8 +603,8 @@ def save_as_transparent_png(img, output_path, canvas_size=2048):
 # [BLOCK3-BEGIN] パーツ抽出コア処理 (2025-10-10)
 # ============================================================
 
-def extract_single_part(font_path, part_name, part_info, output_path, noise_removal=True, log_callback=None):
-    """単一パーツを抽出（動的境界検出対応）"""
+def extract_single_part(font_path, part_name, part_info, output_path, noise_removal=True, log_callback=None, font_index=0):
+    """単一パーツを抽出（動的境界検出対応・TTC対応）"""
     try:
         split_type = part_info["split"]
         ratio = part_info.get("ratio", 0.5)
@@ -615,14 +618,15 @@ def extract_single_part(font_path, part_name, part_info, output_path, noise_remo
         img = None
         used_char = None
         for candidate_char in candidates:
-            img = render_char_to_bitmap(candidate_char, font_path)
+            img = render_char_to_bitmap(candidate_char, font_path, font_index=font_index)
             if img is not None:
                 used_char = candidate_char
                 break
 
         # 全ての候補で失敗した場合
         if img is None:
-            return False, None, "レンダリング失敗（全ての代替文字でも失敗）", None, ratio
+            error_msg = f"レンダリング失敗（全ての代替文字でも失敗）\n試行した文字: {', '.join(candidates)}"
+            return False, None, error_msg, None, ratio
 
         # 動的境界検出（オプション機能）
         used_ratio = ratio
@@ -681,9 +685,9 @@ def extract_single_part(font_path, part_name, part_info, output_path, noise_remo
         return False, None, str(e), None, ratio
 
 
-def extract_all_parts(font_path, output_dir, progress_callback=None, log_callback=None):
-    """フォントから全パーツを抽出"""
-    
+def extract_all_parts(font_path, output_dir, progress_callback=None, log_callback=None, font_index=0):
+    """フォントから全パーツを抽出（TTC対応）"""
+
     def log(msg):
         if log_callback:
             log_callback(msg)
@@ -742,7 +746,7 @@ def extract_all_parts(font_path, output_dir, progress_callback=None, log_callbac
                 progress_callback(current_idx, total_parts, f"{part_name} 処理中...")
 
             success, img, error, used_char, used_ratio = extract_single_part(
-                font_path, part_name, part_info, output_path, log_callback=log
+                font_path, part_name, part_info, output_path, log_callback=log, font_index=font_index
             )
 
             if success:
@@ -805,13 +809,14 @@ def extract_all_parts(font_path, output_dir, progress_callback=None, log_callbac
 class PartsPreviewWindow(tk.Toplevel):
     """偏旁エディタウィンドウ"""
 
-    def __init__(self, parent, parts_dir, font_path):
+    def __init__(self, parent, parts_dir, font_path, font_index=0):
         super().__init__(parent)
         self.title("偏旁エディタ")
         self.geometry("1500x850")
-        
+
         self.parts_dir = parts_dir
         self.font_path = font_path
+        self.font_index = font_index  # TTCファイル用のインデックス
         self.catalog = self._load_catalog()
         self.current_category = None
         self.current_part = None
@@ -1563,57 +1568,85 @@ class PartsPreviewWindow(tk.Toplevel):
         if not self.current_part:
             messagebox.showwarning("警告", "パーツを選択してください")
             return
-        
+
         sample_char = self.sample_entry.get()
         if not sample_char:
             messagebox.showwarning("警告", "サンプル文字を入力してください")
             return
-        
+
         part_data = self.catalog[self.current_category][self.current_part]
+
+        # part_infoに必要な情報を全て含める（alternativesも）
         part_info = {
             "sample": sample_char,
             "split": self.current_split_type,
             "ratio": self.ratio_var.get(),
-            "char": part_data["char"]
+            "char": part_data.get("char", ""),
+            "alternatives": part_data.get("alternatives", [])
         }
-        
+
         filename = part_data["file"]
         output_path = os.path.join(self.parts_dir, filename)
 
-        success, img, error, used_char, used_ratio = extract_single_part(
-            self.font_path,
-            self.current_part,
-            part_info,
-            output_path,
-            noise_removal=self.noise_removal_var.get()
-        )
+        # エラーログ用のコールバック
+        error_log = []
+        def log_error(msg):
+            error_log.append(msg)
+            print(msg)
 
-        if success:
-            img_rgba = Image.open(output_path).convert('RGBA')
-            bg = Image.new('L', img_rgba.size, 255)
-            for y in range(img_rgba.height):
-                for x in range(img_rgba.width):
-                    r, g, b, a = img_rgba.getpixel((x, y))
-                    if a > 0:
-                        bg.putpixel((x, y), 0)
-            
-            self.current_image = bg
-            self.zoom_level = 1.0
-            
-            self.undo_stack = [self.current_image.copy()]
-            self.redo_stack = []
-            
-            self._update_preview()
-            messagebox.showinfo("成功", "再抽出しました")
-            
-            self.catalog[self.current_category][self.current_part]["sample"] = sample_char
-            self.catalog[self.current_category][self.current_part]["split"] = self.current_split_type
-            self.catalog[self.current_category][self.current_part]["ratio"] = self.ratio_var.get()
-            self._save_catalog()
-            
-            self._display_parts_grid()
-        else:
-            messagebox.showerror("エラー", f"再抽出失敗: {error}")
+        try:
+            success, img, error, used_char, used_ratio = extract_single_part(
+                self.font_path,
+                self.current_part,
+                part_info,
+                output_path,
+                noise_removal=self.noise_removal_var.get(),
+                log_callback=log_error,
+                font_index=self.font_index
+            )
+
+            if success:
+                img_rgba = Image.open(output_path).convert('RGBA')
+                bg = Image.new('L', img_rgba.size, 255)
+                for y in range(img_rgba.height):
+                    for x in range(img_rgba.width):
+                        r, g, b, a = img_rgba.getpixel((x, y))
+                        if a > 0:
+                            bg.putpixel((x, y), 0)
+
+                self.current_image = bg
+                self.zoom_level = 1.0
+                self.pan_offset_x = 0
+                self.pan_offset_y = 0
+
+                self.undo_stack = [self.current_image.copy()]
+                self.redo_stack = []
+
+                self._update_preview()
+
+                # カタログ更新
+                self.catalog[self.current_category][self.current_part]["sample"] = sample_char
+                self.catalog[self.current_category][self.current_part]["split"] = self.current_split_type
+                self.catalog[self.current_category][self.current_part]["ratio"] = self.ratio_var.get()
+                if used_char and used_char != sample_char:
+                    msg = f"再抽出しました\n（使用文字: {used_char}）"
+                else:
+                    msg = "再抽出しました"
+
+                self._save_catalog()
+                self._display_parts_grid()
+
+                messagebox.showinfo("成功", msg)
+            else:
+                error_msg = f"再抽出失敗: {error}"
+                if error_log:
+                    error_msg += "\n\n詳細:\n" + "\n".join(error_log)
+                messagebox.showerror("エラー", error_msg)
+        except Exception as e:
+            error_msg = f"予期しないエラー: {str(e)}"
+            if error_log:
+                error_msg += "\n\n詳細:\n" + "\n".join(error_log)
+            messagebox.showerror("エラー", error_msg)
     
     def _save_current(self):
         """現在の編集を保存"""
@@ -1688,11 +1721,12 @@ class PartsExtractorGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("偏旁抽出ツール v2.9 (2025-11-09) - 動的境界検出 + 2048解像度対応")
-        
+
         self.font_path = None
+        self.font_index = 0  # TTCファイル用のフォントインデックス
         self.output_dir = "assets/parts"
         self.is_running = False
-        
+
         self._setup_ui()
     
     def _setup_ui(self):
@@ -1758,12 +1792,86 @@ class PartsExtractorGUI:
     def _select_font(self):
         path = filedialog.askopenfilename(
             title="フォントファイルを選択",
-            filetypes=[("フォントファイル", "*.ttf *.otf"), ("すべてのファイル", "*.*")]
+            filetypes=[("フォントファイル", "*.ttf *.otf *.ttc"), ("すべてのファイル", "*.*")]
         )
         if path:
             self.font_path = path
-            self.font_label.config(text=os.path.basename(path), foreground="black")
+            self.font_index = 0  # デフォルトは最初のフォント
+
+            # TTCファイルの場合はフォントインデックスを選択
+            if path.lower().endswith('.ttc'):
+                self.font_index = self._select_ttc_font_index(path)
+
+            font_info = os.path.basename(path)
+            if self.font_index > 0:
+                font_info += f" (フォント #{self.font_index})"
+
+            self.font_label.config(text=font_info, foreground="black")
             self._log(f"\n✅ フォント選択: {path}")
+            if self.font_index > 0:
+                self._log(f"   フォントインデックス: {self.font_index}")
+
+    def _select_ttc_font_index(self, ttc_path):
+        """TTCファイルからフォントインデックスを選択"""
+        # TTCファイルに含まれるフォント数を調べる
+        font_count = self._get_ttc_font_count(ttc_path)
+
+        if font_count <= 1:
+            return 0
+
+        # ダイアログでフォントインデックスを選択
+        dialog = tk.Toplevel(self.root)
+        dialog.title("TTCフォント選択")
+        dialog.geometry("400x200")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text=f"このTTCファイルには{font_count}個のフォントが含まれています。\n使用するフォントを選択してください:").pack(pady=10)
+
+        # プレビューフレーム
+        preview_frame = ttk.Frame(dialog)
+        preview_frame.pack(pady=10)
+
+        selected_index = tk.IntVar(value=0)
+
+        for i in range(min(font_count, 10)):  # 最大10個まで表示
+            name = self._get_font_name_from_ttc(ttc_path, i)
+            label = f"フォント {i}: {name}" if name else f"フォント {i}"
+            ttk.Radiobutton(preview_frame, text=label, variable=selected_index, value=i).pack(anchor=tk.W)
+
+        if font_count > 10:
+            ttk.Label(preview_frame, text=f"... 他 {font_count - 10} 個のフォント", foreground="gray").pack(anchor=tk.W)
+
+        # OKボタン
+        ttk.Button(dialog, text="OK", command=dialog.destroy).pack(pady=10)
+
+        dialog.wait_window()
+        return selected_index.get()
+
+    def _get_ttc_font_count(self, ttc_path):
+        """TTCファイルに含まれるフォント数を取得"""
+        try:
+            count = 0
+            while True:
+                try:
+                    ImageFont.truetype(ttc_path, 20, index=count)
+                    count += 1
+                    if count > 100:  # 安全のため上限を設定
+                        break
+                except:
+                    break
+            return max(count, 1)
+        except:
+            return 1
+
+    def _get_font_name_from_ttc(self, ttc_path, index):
+        """TTCファイルから指定インデックスのフォント名を取得"""
+        try:
+            font = ImageFont.truetype(ttc_path, 20, index=index)
+            # フォント名を取得する試み（完全ではない）
+            return f"インデックス {index}"
+        except:
+            return None
     
     def _select_output(self):
         path = filedialog.askdirectory(title="出力ディレクトリを選択")
@@ -1790,7 +1898,7 @@ class PartsExtractorGUI:
         if not self.font_path:
             messagebox.showwarning("警告", "フォントファイルを選択してください")
             return
-        PartsPreviewWindow(self.root, self.output_dir, self.font_path)
+        PartsPreviewWindow(self.root, self.output_dir, self.font_path, self.font_index)
     
     def _log(self, message):
         self.log_text.insert(tk.END, message + "\n")
@@ -1827,7 +1935,8 @@ class PartsExtractorGUI:
                 self.font_path,
                 self.output_dir,
                 progress_callback=self._update_progress,
-                log_callback=self._log
+                log_callback=self._log,
+                font_index=self.font_index
             )
             
             self.root.after(0, lambda: messagebox.showinfo(
